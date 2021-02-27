@@ -19,45 +19,70 @@ from PIL import ExifTags
 import tensorflow as tf # TF2
 from datetime import datetime
 import rawpy
-
-class ImageMetadata(object):
-    def __init__(self, filename, thumbnail, location, classification, detectedobjects):
-        pass
-
+import os
+from io import BytesIO
+import base64
 
 class Image(object):
     def __init__(self, filename):
         self.filename = filename
-        self.type = 'JPG' # or raw, or something
         self.location = None
-        self.img = PIL_Image.open(filename)
-        self.photo_date_tag = self.get_exif_tag_by_name('DateTimeOriginal')
         self.date_taken = None
-            
+        self.load_file(filename)
+
+    def load_file(self, filename):
+        self.extension = os.path.splitext(filename)[-1].upper()
+        if self.extension in ['.JPG', '.JPEG']:
+            self.load_jpeg_file(filename)
+        elif self.extension in ['.CR2', '.CR3']:
+            self.load_raw_file(filename)
+        else:
+            raise Exception(f"I don't know how to open {self.extension}, sorry.")
+
+    def load_jpeg_file(self, filename):
+        self.img = PIL_Image.open(filename)
+        self.make_exif(self.img.getexif())
+        self.date_taken = datetime.strptime(self.get_exif()['DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
+
+    def load_raw_file(self, filename):
+        # Load image data in as a PIL object
+        with rawpy.imread(filename) as raw:
+            #rgb = raw.postprocess()
+            # Thumbnail is 300x300 so ok for classification
+            thumbnail = PIL_Image.open(BytesIO(raw.extract_thumb().data))
+        self.img = thumbnail
+        self.make_exif(self.img.getexif())
+
+        # Save the date taken for later use
+        self.date_taken = datetime.strptime(self.get_exif()['DateTime'], '%Y:%m:%d %H:%M:%S')
+
     def get_exif(self):
-        return self.img.getexif()
+        return self.exif_data
+    
+    def get_json_safe_exif(self):
+        return {k: str(v) for k,v in self.get_exif().items() }
+    
+    def make_exif(self, e):
+        self.exif_data = {
+            ExifTags.TAGS[k]: v
+            for k, v in e.items()
+            if k in ExifTags.TAGS
+        }
 
     def get_photo_date(self):
-        if not self.date_taken:
-            exif_data = self.img.getexif()
-            self.date_taken = datetime.strptime(exif_data[self.photo_date_tag], '%Y:%m:%d %H:%M:%S')
         return self.date_taken
-
-    def get_exif_tag_by_name(self, tagname):
-        return list(ExifTags.TAGS.keys())[list(ExifTags.TAGS.values()).index(tagname)]
 
     def crop(self, region):
         return self.img.crop(region)
 
     def resize(self, size):
         return self.img.resize(size)
-
-    def get_tensor_data(self):
-        # We can probably do this better, without reopening.
-        img = tf.io.read_file(self.filename)
-        img = tf.image.decode_jpeg(img, channels=3)
-        return tf.image.convert_image_dtype(img, tf.float32)[tf.newaxis, ...]
-
-
-    def get_metadata(self):
-        return ImageMetadata(self.filename, None, self.location, None, None)
+    
+    def get_image_object(self):
+        return self.img
+    
+    def get_thumbnail(self):
+        thumb = self.img.resize((32,32))
+        buffered = BytesIO()
+        thumb.save(buffered, format="JPEG")
+        return base64.b64encode(buffered.getvalue())

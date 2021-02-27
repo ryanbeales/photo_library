@@ -1,5 +1,8 @@
 import numpy as np
+
 import tensorflow as tf # TF2
+tf.get_logger().setLevel('ERROR')
+
 import psutil
 
 class Classifier(object):
@@ -21,11 +24,11 @@ class Classifier(object):
         with open(labels_file, 'r') as f:
             self.labels = [line.strip() for line in f.readlines()]
 
-    def get_image_file(self, img):
+    def resize_image(self, img):
        return img.resize((self.width, self.height))
     
-    def classify_image(self, imgfile):
-        img = self.get_image_file(imgfile)
+    def classify_image(self, img):
+        img = self.resize_image(img.get_image_object())
         return self.classify(img)
     
     def classify_image_region(self, img, region):
@@ -49,12 +52,5 @@ class Classifier(object):
 
         top_k = results.argsort()[-5:][::-1]
 
-        returned_results = {self.labels[i]:results[i] for i in top_k}
-        # for i in top_k:
-        #     if self.floating_model:
-        #         print('{:08.6f}: {}'.format(float(results[i]), self.labels[i]))
-        #     else:
-        #         print('{:08.6f}: {}'.format(float(results[i] / 255.0), self.labels[i]))
-
-        # print('time: {:.3f}ms'.format((stop_time - start_time) * 1000))
+        returned_results = {self.labels[i]:int(results[i]*100) for i in top_k}
         return returned_results

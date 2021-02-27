@@ -28,7 +28,7 @@ class Locations:
             "accuracy" : 1046
         },
     """
-    def __init__(self, history_file='Location_History.json'):
+    def __init__(self, history_file='Location_History.json', enable_geopy=False):
         with open(history_file) as f:
             locations=json.load(f)
         
@@ -40,11 +40,14 @@ class Locations:
             self.locations[timestamp] = [lat, lng]
         
         self.location_keys = sorted(self.locations.keys())
-        self.geolocator = Nominatim(user_agent="RB PhotoGeoCoder")
-        self.reverse = RateLimiter(self.geolocator.reverse, min_delay_seconds=2)
+        self.enable_geopy = enable_geopy
+        if self.enable_geopy:
+            self.geolocator = Nominatim(user_agent="RB PhotoGeoCoder")
+            self.reverse = RateLimiter(self.geolocator.reverse, min_delay_seconds=2)
 
 
     def get_location_at_timestamp(self, timestamp):
         # Search for minimum difference in list of keys
         closest_timestamp = min(self.location_keys, key=lambda d: abs(d-timestamp))
+        # if self.enable_geopy, do stuff...
         return self.locations[closest_timestamp]
