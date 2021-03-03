@@ -12,7 +12,7 @@ class Worker(object):
         self,
         classifer=Classifier('/work/nasnet/nasnet_large.tflite', '/work/nasnet/labels.txt'),
         object_detector=ObjectDetector('/work/object_detector'),
-        locations=Locations(history_file=r'/work/stash/Backup/Google Location History/Location History.json'),
+        locations=Locations(history_file=r'/work/stash/Backup/Google Location History/Location History.json', history_db_dir='/work/stash/src/classification_output/'),
         processed_images=ProcessedImages('/work/stash/src/classification_output/image_metadata.json'),
         file_types=['.CR2', '.CR3', '.JPG']
     ):
