@@ -29,3 +29,5 @@ class ProcessedImages(object):
     def save(self):
         with open(self.saved_filename, 'w') as f:
             f.write(json.dumps(self.images))
+    def commit(self):
+        pass

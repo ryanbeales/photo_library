@@ -16,7 +16,7 @@ RUN wget https://storage.googleapis.com/tfhub-modules/google/faster_rcnn/openima
 RUN tar xvzf 1.tar.gz
 RUN rm 1.tar.gz
 
-RUN pip install pillow psutil tensorflow_hub geopy rawpy folium scipy pyexiftool
+RUN pip install pillow psutil tensorflow_hub geopy rawpy folium scipy pyexiftool progress
 RUN apt install -y exiftool
 
 COPY app /work/app
