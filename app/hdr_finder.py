@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-class HDR_Finder(object):
+class HDRFinder(object):
     def __init__(self, processed_image=None, max_duration_for_set=5):
         if processed_image != None:
             self.processed_image = processed_image

@@ -15,59 +15,10 @@ from image import Image
 from classifier import Classifier
 from objectdetector import ObjectDetector
 from locations import Locations
-from hdr_finder import HDR_Finder
+from hdr_finder import HDRFinder
+from map_maker import MapMaker
+from processed_images import ProcessedImages
 
-import folium
-import folium.plugins as folium_plugins
-
-
-class ProcessedImages(object):
-    def __init__(self, saved_filename=None):
-        self.saved_filename = saved_filename
-        self.load()
-        
-    def load(self):
-        if self.saved_filename:
-            try:
-                with open(self.saved_filename) as f:
-                    self.images = json.load(f)
-            except:
-                self.images = {}
-
-    def add(self, metadata):
-        self.images[metadata['filename']] = metadata
-
-    def add_metadata(self, filenames, metadata_fieldname, metadata_value):
-        for filename in filenames:
-            self.images[filename][metadata_fieldname] = metadata_value
-    
-    def retrieve(self, filename):
-        if filename in self.images.keys():
-            return self.images[filename]
-        else:
-            return None
-    
-    def save(self):
-        with open(self.saved_filename, 'w') as f:
-            f.write(json.dumps(self.images))
-
-    def make_map(self, filename):
-        m = folium.Map(control_scale=True)
-
-        def make_popup(imagedata):
-            width, height = 64, 64
-            html = '<img src="data:image/jpeg;base64,{}">'.format
-            iframe = folium.IFrame(html(imagedata), width=width+20, height=height+20)
-            return folium.Popup(iframe, max_width=64)
-
-        mc = folium_plugins.MarkerCluster(
-            locations = [i['location'] for i in self.images.values()],
-            popups = [make_popup(v['thumbnail']) for v in self.images.values()],
-            icons = [folium.Icon(color='red', icon='ok') for i in self.images.values()]
-        )
-
-        m.add_child(mc)
-        m.save(filename)
 
 class MetadataWorker(object):
     def __init__(self, locations_source, classifier, object_detector):
@@ -129,7 +80,7 @@ if __name__ == '__main__':
 
     processed_images = ProcessedImages('/work/stash/src/classification_output/image_metadata.json')
 
-    hdr_checker = HDR_Finder(processed_images)
+    hdr_checker = HDRFinder(processed_images)
 
     count=0
     average_image_time = 1
@@ -159,5 +110,6 @@ if __name__ == '__main__':
     processed_images.save()
 
     print('Generating map')
-    processed_images.make_map('/work/stash/src/classification_output/image_map.html')
+    m = MapMaker(processed_images)
+    m.make_map('/work/stash/src/classification_output/image_map.html')
     print('Done!')
