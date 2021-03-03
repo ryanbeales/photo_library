@@ -1,27 +1,69 @@
-# Image signatures:
-#   Once you have a fingerprint, use https://en.wikipedia.org/wiki/Earth_mover%27s_distance to calculate similarity
 # Test if similar image:
-#   Greyscale, blur, scale to 16x16 for a 256bit fingerprint, xor values and compare left over values for a guess at similar images
+#   Greyscale, blur, scale to 128x128, get the histogram (we could just use the full histogram here?)
+#   Very low wasserstein_distance (<2? for 128x128 image) means it's probably almost the same image of the same thing.
+#
 # Test if part of a panorama:
 #   Grayscale it, blur it, scale it down to 16x16 and you get a 256bit signature
 #   Save the image in 16x16 columns of data, then you can compare columns for potential matches with a column from another image
 #   The more columns that match, the higher chance they are part of a panorama.
 #   Also - if the filesnames/dates are very close to each other then higher chance they are part of a panorama set
-# Test if part of HDR set:
-#   Same greyscale, blur, scale down to 16x16 and 256bit signature
-#   However, normalize to 50% grey - then you can compare images of different luminence/brightness
-#
+
+
 # With that info we can fire off hugin or something to autoprocess photos into tiffs, then bring in to photoshop/lightroom for 
 # further processing
 
 from PIL import Image as PIL_Image
 from PIL import ExifTags
-import tensorflow as tf # TF2
-from datetime import datetime
+from PIL import ImageOps as PIL_ImageOps
+from PIL import ImageFilter as PIL_ImageFilter
+
+import numpy as np
+
+from datetime import datetime, timedelta
+
 import rawpy
+
 import os
 from io import BytesIO
 import base64
+
+import scipy.stats as stats
+
+
+import subprocess
+import os
+import json
+
+class ExifTool(object):
+    sentinel = "{ready}" + os.linesep
+
+    def __init__(self, executable="exiftool"):
+        self.executable = executable
+
+    def __enter__(self):
+        self.process = subprocess.Popen(
+            [self.executable, "-stay_open", "True",  "-@", "-"],
+            universal_newlines=True,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        return self
+
+    def  __exit__(self, exc_type, exc_value, traceback):
+        self.process.stdin.write("-stay_open\nFalse\n")
+        self.process.stdin.flush()
+
+    def execute(self, *args):
+        args = args + ("-execute\n",)
+        self.process.stdin.write(str.join("\n", args))
+        self.process.stdin.flush()
+        output = ""
+        fd = self.process.stdout.fileno()
+        while not output.endswith(self.sentinel):
+            output += os.read(fd, 4096).decode('utf-8')
+        return output[:-len(self.sentinel)]
+
+    def get_metadata(self, *filenames):
+        return json.loads(self.execute("-G", "-j", "-n", *filenames))
+
 
 class Image(object):
     def __init__(self, filename):
@@ -29,6 +71,9 @@ class Image(object):
         self.location = None
         self.date_taken = None
         self.load_file(filename)
+        self.bracket_mode = 0
+        self.bracket_shot_count = 1
+        self.bracket_exposure_value = 0
 
     def load_file(self, filename):
         self.extension = os.path.splitext(filename)[-1].upper()
@@ -47,15 +92,19 @@ class Image(object):
     def load_raw_file(self, filename):
         # Load image data in as a PIL object
         with rawpy.imread(filename) as raw:
-            #rgb = raw.postprocess()
-            # Thumbnail is 300x300 so ok for classification
-            thumbnail = PIL_Image.open(BytesIO(raw.extract_thumb().data))
-        self.img = thumbnail
-        self.make_exif(self.img.getexif())
+            self.img = PIL_Image.open(BytesIO(raw.extract_thumb().data))
+        with ExifTool() as e:
+            self.exif_data = e.get_metadata(filename)[0]
 
-        # Save the date taken for later use
-        self.date_taken = datetime.strptime(self.get_exif()['DateTime'], '%Y:%m:%d %H:%M:%S')
-
+        self.date_taken = datetime.strptime(self.get_exif()['EXIF:DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
+            
+        self.bracket_exposure_value = self.get_exif()['MakerNotes:BracketValue']
+        self.bracket_mode = self.get_exif()['MakerNotes:BracketMode']
+        if 'MakerNotes:AEBShotCount' in self.get_exif():
+            self.bracket_shot_count = self.get_exif()['MakerNotes:AEBShotCount']
+        else:
+            self.bracket_shot_count = 3
+        
     def get_exif(self):
         return self.exif_data
     
@@ -82,7 +131,17 @@ class Image(object):
         return self.img
     
     def get_thumbnail(self):
-        thumb = self.img.resize((32,32))
+        thumb = self.img.resize((64,64))
         buffered = BytesIO()
         thumb.save(buffered, format="JPEG")
         return base64.b64encode(buffered.getvalue())
+
+    def get_fingerprint(self):
+        # Blur, resize, greyscale, autocontrast
+        blurred = self.img.filter(PIL_ImageFilter.GaussianBlur(radius=3))
+        greyscale = PIL_ImageOps.grayscale(blurred)
+        autocontrast = PIL_ImageOps.autocontrast(greyscale, cutoff=5) # remove 5% from top and bottom of histogram
+        return autocontrast.histogram()
+
+    def compare(self, image2):
+        return stats.wasserstein_distance(self.get_fingerprint(), image2.get_fingerprint())
