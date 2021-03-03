@@ -27,7 +27,7 @@ class Worker(object):
         if not file_types:
             file_types = self.file_types
 
-        for root, dirs, files in os.walk(base_dir, topdown = False):
+        for root, _, files in os.walk(base_dir, topdown = False):
             for name in files:
                 fullpath = os.path.join(root, name)
                 if os.path.splitext(fullpath)[-1].upper() in file_types:
