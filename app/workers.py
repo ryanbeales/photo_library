@@ -99,13 +99,3 @@ class MetadataWorker(object):
                 'bracket_exposure_value': image.bracket_exposure_value,
                 'thumbnail': image.get_thumbnail().decode('utf-8')
         }
-
-
-def get_image_files(base_dir, file_types=['.CR2', '.CR3', '.JPG']):
-    found_files = []
-    for root, dirs, files in os.walk(base_dir, topdown = False):
-       for name in files:
-          fullpath = os.path.join(root, name)
-          if os.path.splitext(fullpath)[-1].upper() in file_types:
-              found_files.append(fullpath)
-    return found_files
