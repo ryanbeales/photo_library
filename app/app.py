@@ -5,6 +5,8 @@ from datetime import timedelta
 from pprint import pprint
 from workers import Worker
 
+import os
+
 from progress.bar import Bar
 
 class Display():
@@ -14,7 +16,7 @@ class Display():
         self.average_image_time = 1
 
         if progress_bar:
-            self.progress = Bar('Processing images', max=total_images)
+            self.progress = Bar('Processing images', width=110, max=total_images, suffix='%(index)d/%(max)d - %(eta)ds')
 
 
     def display_callback(self, image_file, state):
@@ -39,6 +41,9 @@ class Display():
                 print("Time on image: ", self.end_time-self.start_time)
                 print(f"Approximate time left: {time_left}")
 
+        elif state == 'done':
+            self.progress.finish()
+
 
 
 if __name__ == '__main__':
@@ -48,8 +53,14 @@ if __name__ == '__main__':
 
     d = Display(total_files, progress_bar=True)
 
-    w.scan(reprocess=True, processed_file_callback=d.display_callback)
 
+    reprocess = False
+    if 'PHOTO_REPROCESS' in os.environ:
+        reprocess=True
+
+    w.scan(reprocess=reprocess, processed_file_callback=d.display_callback)
+
+    print('')
     print('Generating map')
     w.make_map('/work/stash/src/classification_output/image_map.html')
     print('Done!')
