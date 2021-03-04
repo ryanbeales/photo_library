@@ -5,7 +5,7 @@ from objectdetector import ObjectDetector
 from locations import Locations
 from hdr_finder import HDRFinder
 from map_maker import MapMaker
-from processed_images import ProcessedImages
+from processed_images import ProcessedImages, ProcessedImage
 
 class Worker(object):
     def __init__(
@@ -13,7 +13,7 @@ class Worker(object):
         classifer=Classifier('/work/nasnet/nasnet_large.tflite', '/work/nasnet/labels.txt'),
         object_detector=ObjectDetector('/work/object_detector'),
         locations=Locations(history_file=r'/work/stash/Backup/Google Location History/Location History.json', history_db_dir='/work/stash/src/classification_output/'),
-        processed_images=ProcessedImages('/work/stash/src/classification_output/image_metadata.json'),
+        processed_images=ProcessedImages(db_dir='/work/stash/src/classification_output/'),
         file_types=['.CR2', '.CR3', '.JPG']
     ):
         self.classifer = classifer
@@ -67,7 +67,6 @@ class Worker(object):
 
             self.processed_images.commit()
             processed_file_callback(image_file, 'end')
-        self.processed_images.save()
 
     def make_map(self, filename):
         m = MapMaker(self.processed_images)
@@ -87,15 +86,17 @@ class MetadataWorker(object):
         image_classification = self.classifier.classify_image(image) if self.classifier and classify else None
         location = self.locations.get_location_at_timestamp(image.get_photo_date()) if self.locations and get_location else None
 
-        return {
-                'filename': filename, 
-                'classification': image_classification, 
-                'detected_objects': detected_objects, 
-                'location': location, 
-                'date_taken': str(image.get_photo_date()), 
-                'exif_data': image.get_json_safe_exif(), 
-                'bracket_shot_count': image.bracket_shot_count,
-                'bracket_mode': image.bracket_mode,
-                'bracket_exposure_value': image.bracket_exposure_value,
-                'thumbnail': image.get_thumbnail().decode('utf-8')
-        }
+        p = ProcessedImage(
+            filename=filename,
+            classification=image_classification,
+            detected_objects=detected_objects,
+            location=location,
+            date_taken=image.get_photo_date(),
+            exif_data = image.get_json_safe_exif(),
+            bracket_shot_count = image.bracket_shot_count,
+            bracket_mode=image.bracket_mode,
+            bracket_exposure_value=image.bracket_exposure_value,
+            thumbnail=image.get_thumbnail().decode('utf-8')
+        )
+
+        return p

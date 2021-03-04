@@ -8,12 +8,11 @@ class HDRFinder(object):
         self.max_duration_for_set = timedelta(seconds=max_duration_for_set)
     
     def check(self, metadata):
-        if metadata['bracket_mode'] == 1:
+        if metadata.bracket_mode == 1:
             self.HDR_group.append(metadata)
-            if len(self.HDR_group) == metadata['bracket_shot_count']:
-                if (self.HDR_group[-1].get_photo_date() - self.HDR_group[1].get_photo_date()) <= self.max_duration_for_set:
-                    filenames = [i['filename'] for i in self.HDR_group]
-                    self.processed_image.add_metadata(filenames, 'hdr_group', filenames)
-            
+            if len(self.HDR_group) == metadata.bracket_shot_count:
+                if (self.HDR_group[-1].date_taken - self.HDR_group[1].date_taken) <= self.max_duration_for_set:
+                    filenames = [i.filename for i in self.HDR_group]
+                    self.processed_image.create_hdr_set(filenames)
                     # Reset group
                     self.HDR_group = []
