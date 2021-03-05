@@ -5,6 +5,9 @@ from datetime import datetime
 import sqlite3
 import os
 
+from threading import Lock
+
+
 class Locations:
     """
     {
@@ -23,8 +26,9 @@ class Locations:
     def __init__(self, history_file=None, history_db_dir=None, enable_geopy=False):
         self.location_database_name = history_db_dir + os.sep + 'locations.db'
 
-        self.conn = sqlite3.connect(self.location_database_name)
+        self.conn = sqlite3.connect(self.location_database_name, check_same_thread=False)
         self.cursor = self.conn.cursor()
+        self.lock = Lock()
 
         if not self.check_database_current(history_file):
             self.load_json_data(history_file)
@@ -60,37 +64,43 @@ class Locations:
         return False
 
     def load_json_data(self, jsonfile):
-        self.create_tables()
-        self.cursor.execute('DELETE FROM locations')
-        self.cursor.execute('DELETE FROM historytimestamp')
-        self.cursor.execute('INSERT INTO historytimestamp VALUES (?)', (int(os.stat(jsonfile).st_ctime), ))
+        # Get a lock if we're loading everything in
+        with self.lock:
+            self.create_tables()
+            self.cursor.execute('DELETE FROM locations')
+            self.cursor.execute('DELETE FROM historytimestamp')
+            self.cursor.execute('INSERT INTO historytimestamp VALUES (?)', (int(os.stat(jsonfile).st_ctime), ))
 
-        with open(jsonfile) as f:
-            locations=json.load(f)
+            with open(jsonfile) as f:
+                locations=json.load(f)
 
-        for l in locations['locations']:
-            timestamp = int(l['timestampMs']) / 1000
-            lat = l['latitudeE7']
-            lng = l['longitudeE7']
-            accuracy = l['accuracy'] if 'accuracy' in l else -1
+            for l in locations['locations']:
+                timestamp = int(l['timestampMs']) / 1000
+                lat = l['latitudeE7']
+                lng = l['longitudeE7']
+                accuracy = l['accuracy'] if 'accuracy' in l else -1
 
-            self.cursor.execute('INSERT INTO locations VALUES(?, ?, ?, ?);', (timestamp, lat, lng, accuracy))
-        self.conn.commit()
+                self.cursor.execute('INSERT INTO locations VALUES(?, ?, ?, ?);', (timestamp, lat, lng, accuracy))
+            self.conn.commit()
 
     def get_location_at_timestamp(self, timestamp):
         # Convert incoming datetime object to a timestamp int
         t = int(timestamp.timestamp())
-        
-        # Find the two nearest values to the timestamp given, and return the lat/lng associated with both
-        self.cursor.execute('''
-            SELECT lat,lng FROM locations WHERE timestamp IN (
-                SELECT MIN(timestamp) FROM locations where timestamp >= ?
-                UNION
-                SELECT MAX(timestamp) from locations where timestamp <= ?
-            )
-        ''', (t, t, ) )
 
-        r = self.cursor.fetchall()
+        # Acquire a lock before running the below
+        with self.lock:
+            # Find the two nearest values to the timestamp given, and return the lat/lng associated with both
+            self.cursor.execute('''
+                SELECT lat,lng FROM locations WHERE timestamp IN (
+                    SELECT MIN(timestamp) FROM locations where timestamp >= ?
+                    UNION
+                    SELECT MAX(timestamp) from locations where timestamp <= ?
+                )
+            ''', (t, t, ) )
+
+            r = self.cursor.fetchall()
+
+            # Release the lock now we're done executing.
 
         # If there's more than one result, average the two
         if len(r) > 1:

@@ -3,6 +3,9 @@
 # Something for maps? Searching based on class? area?
 
 # TODO:
+# - Logging!!
+# - Monitor queue depth? somehow.
+# - Exif on a thread, make it not fail on missing keys...
 # - Fix misclassification of rivers/waterfalls as Geysers.
 # - Fail gracefully if anything goes missing / is wrong (location data, unreadable files, etc)
 # - Let tensorflow download models from hub? Maybe after we're confident it all works.
@@ -10,6 +13,8 @@
 # - A way to query/display all this...
 #
 # Done:
+# - Threading for image processing? How can I do that. - DONE
+# - Make processed image class, instead of just using a dict. - DONE
 # - A better file globber to walk the photos directory and classify things - DONE
 # - Figure out how to do this over time, rerun with better classifications, better location data, etc. - DONE
 # - Processed image class, containing all the metadata and thumbnail. From that we can generate an output (json?) or a map? - DONE

@@ -1,19 +1,23 @@
 import os
 from image import Image
-from classifier import Classifier
-from objectdetector import ObjectDetector
+#from classifier import Classifier
+#from objectdetector import ObjectDetector
 from locations import Locations
 from hdr_finder import HDRFinder
 from map_maker import MapMaker
-from processed_images import ProcessedImages, ProcessedImage
+from processed_images import QueueingProcessedImages, ProcessedImage
+
+from threading import Lock
+from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
+
 
 class Worker(object):
     def __init__(
         self,
-        classifer=Classifier('/work/nasnet/nasnet_large.tflite', '/work/nasnet/labels.txt'),
-        object_detector=ObjectDetector('/work/object_detector'),
+        classifer=None,  #Classifier('/work/nasnet/nasnet_large.tflite', '/work/nasnet/labels.txt'),
+        object_detector=None, #ObjectDetector('/work/object_detector'),
         locations=Locations(history_file=r'/work/stash/Backup/Google Location History/Location History.json', history_db_dir='/work/stash/src/classification_output/'),
-        processed_images=ProcessedImages(db_dir='/work/stash/src/classification_output/'),
+        processed_images=QueueingProcessedImages(db_dir='/work/stash/src/classification_output/'),
         file_types=['.CR2', '.CR3', '.JPG']
     ):
         self.classifer = classifer
@@ -41,37 +45,53 @@ class Worker(object):
         return len(self.image_files)
 
     def dummy_callback(self, image_file, state):
-        pass
+        print(image_file, state)
+
+    def get_add_queue_depth(self):
+        return self.processed_images.get_add_queue_depth()
+    def get_hdr_queue_depth(self):
+        return self.processed_images.get_add_queue_depth()
+
 
     def scan(self, reprocess=False, find_hdr=True, processed_file_callback=None):
         if not processed_file_callback:
             processed_file_callback = self.dummy_callback
 
+        with ThreadPoolExecutor(max_workers=32) as executor:
+            _ = [
+                executor.submit(
+                    self.process_single_photo,
+                    image_file=image_file, 
+                    reprocess=reprocess, 
+                    find_hdr=find_hdr, 
+                    processed_file_callback=processed_file_callback
+                )
+                for image_file in self.image_files
+            ]
+
+            # I don't think I need this...
+            #wait(threads, return_when=ALL_COMPLETED)
+        processed_file_callback('All', 'done')
+
+    def process_single_photo(self, image_file, reprocess, find_hdr, processed_file_callback):
+        processed_file_callback(image_file, 'start')
+
         worker = MetadataWorker(self.locations, self.classifer, self.object_detector)
-        
         if find_hdr:
             hdr_checker = HDRFinder(self.processed_images)
-        
-        for image_file in self.image_files:
-            processed_file_callback(image_file, 'start')
 
-            if self.processed_images.retrieve(image_file) and not reprocess:
-                processed_file_callback(image_file, 'already_processed')
-                continue
+        if self.processed_images.check_if_processed(image_file) and not reprocess:
+            processed_file_callback(image_file, 'already_processed')
+            return
 
-            metadata = worker.process_image(image_file)
+        metadata = worker.process_image(image_file)
 
-            self.processed_images.add(metadata)
-            if find_hdr:
-                hdr_checker.check(metadata)
+        self.processed_images.add(metadata)
+        if find_hdr:
+            hdr_checker.check(metadata)
 
-            self.processed_images.commit()
-            processed_file_callback(image_file, 'end')
-
-    def make_map(self, filename):
-        m = MapMaker(self.processed_images)
-        m.make_map(filename)
-
+        self.processed_images.commit()
+        processed_file_callback(image_file, 'end')
 
 
 class MetadataWorker(object):

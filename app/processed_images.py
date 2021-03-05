@@ -4,6 +4,9 @@ import datetime
 import os
 import sqlite3
 
+from threading import Thread, Lock
+from queue import Queue
+
 @dataclass
 class ProcessedImage():
     filename: str
@@ -22,7 +25,7 @@ class ProcessedImages(object):
     def __init__(self, db_dir=None):
         self.db_file = db_dir + os.sep + 'images.db'
 
-        self.conn = sqlite3.connect(self.db_file)
+        self.conn = sqlite3.connect(self.db_file, check_same_thread=False)
         self.cursor = self.conn.cursor()
 
         self.load()
@@ -78,6 +81,16 @@ class ProcessedImages(object):
                 REPLACE INTO hdr_groups VALUES (?,?)
             ''', insert)
 
+    def check_if_processed(self, filename):
+        self.cursor.execute('''
+            SELECT EXISTS(SELECT 1 FROM photos WHERE filename=?)
+        ''', ( filename, ))
+        r = self.cursor.fetchone()
+        if r[0] == 1:
+            return True
+        else:
+            return False
+
     def retrieve(self, filename):
         self.cursor.execute('''
             SELECT filename, classification, detected_objects, latitude, longitude, date_taken, exif_data, thumbnail
@@ -109,3 +122,69 @@ class ProcessedImages(object):
     
     def commit(self):
         self.conn.commit()
+
+
+class QueueingProcessedImages():
+    def __init__(self, db_dir=None):
+        self.lock = Lock()
+        self.p = ProcessedImages(db_dir=db_dir)
+        self.add_queue = Queue()
+        self.hdr_queue = Queue()
+        self.add_thread = Thread(target=self.process_add_queue)
+        self.hdr_thread = Thread(target=self.process_hdr_queue)
+        self.add_thread.start()
+        self.hdr_thread.start()
+
+    def __del__(self):
+        # Delete queue.
+        self.p.commit()
+        self.p.__del__()
+        self.add_queue.put(None)
+        self.hdr_queue.put(None)
+        self.add_thread.join()
+        self.hdr_thread.join()
+
+    def get_add_queue_depth(self):
+        return self.add_queue.qsize()
+    def get_hdr_queue_depth(self):
+        return self.hdr_queue.qsize()
+
+    def process_add_queue(self):
+        while True:
+            item = self.add_queue.get()
+            if item is None:
+                break
+            with self.lock:
+                self.p.add(item)
+                self.add_queue.task_done()
+
+    def process_hdr_queue(self):
+        while True:
+            item = self.hdr_queue.get()
+            if item is None:
+                break
+            with self.lock:
+                self.p.create_hdr_set(item)
+                self.hdr_queue.task_done()
+            
+    def add(self, metadata):
+        # Place data in a queue, and return immediately
+        self.add_queue.put(metadata)
+    
+    def create_hdr_set(self, filenames):
+        # Place data in a queue and return immediately
+        self.hdr_queue.put(filenames)
+
+    def commit(self):
+        # This should do nothing in the queueing version.
+        pass
+
+    def retrieve(self, filename):
+        # Blocking, until we can get the connection
+        with self.lock:
+            return self.p.retrieve(filename)
+    
+    def check_if_processed(self, filename):
+        # Blocking, until we can get the connection
+        with self.lock:
+            return self.p.check_if_processed(filename)
