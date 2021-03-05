@@ -3,6 +3,10 @@ tf.get_logger().setLevel('ERROR')
 import tensorflow_hub as hub
 import numpy as np
 
+import logging
+logger = logging.getLogger(__name__)
+
+
 class ObjectDetector:
     # https://github.com/tensorflow/hub/blob/master/examples/colab/object_detection.ipynb
     def __init__(self, model):

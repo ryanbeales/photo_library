@@ -7,6 +7,9 @@ import os
 
 from threading import Lock
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class Locations:
     """

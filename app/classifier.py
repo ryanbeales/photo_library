@@ -5,6 +5,10 @@ tf.get_logger().setLevel('ERROR')
 
 import psutil
 
+import logging
+logger = logging.getLogger(__name__)
+
+
 class Classifier(object):
     def __init__(self, model_path, labels_file):
         self.interpreter = tf.lite.Interpreter(model_path=model_path, num_threads=psutil.cpu_count())

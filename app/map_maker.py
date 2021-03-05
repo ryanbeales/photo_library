@@ -1,6 +1,10 @@
 import folium
 import folium.plugins as folium_plugins
 
+import logging
+logger = logging.getLogger(__name__)
+
+
 class MapMaker(object):
     def __init__(self, processed_images):
         self.processed_images = processed_images

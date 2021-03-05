@@ -34,6 +34,10 @@ import subprocess
 import os
 import json
 
+import logging
+logger = logging.getLogger(__name__)
+
+
 class ExifTool(object):
     sentinel = "{ready}" + os.linesep
 

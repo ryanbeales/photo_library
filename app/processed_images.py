@@ -7,6 +7,10 @@ import sqlite3
 from threading import Thread, Lock
 from queue import Queue, Empty
 
+import logging
+logger = logging.getLogger(__name__)
+
+
 @dataclass
 class ProcessedImage():
     filename: str
@@ -43,7 +47,10 @@ class ProcessedImages(object):
                 longitude REAL,
                 date_taken INTEGER,
                 exif_data TEXT,
-                thumbnail TEXT
+                thumbnail TEXT,
+                bracket_exposure_value INTEGER,
+                bracket_mode INTEGER,
+                bracket_shot_count INTEGER
             );
 
             CREATE UNIQUE INDEX IF NOT EXISTS photos_filename_ids on photos(filename);
@@ -66,10 +73,13 @@ class ProcessedImages(object):
             metadata.location[1],
             int(metadata.date_taken.timestamp()),
             json.dumps(metadata.exif_data),
-            metadata.thumbnail
+            metadata.thumbnail,
+            metadata.bracket_exposure_value,
+            metadata.bracket_mode,
+            metadata.bracket_shot_count
         )
         self.cursor.execute('''
-            REPLACE INTO photos VALUES (?,?,?,?,?,?,?,?)  
+            REPLACE INTO photos VALUES (?,?,?,?,?,?,?,?,?,?,?)  
         ''', insert_values)
 
     def create_hdr_set(self, filenames):
@@ -91,9 +101,17 @@ class ProcessedImages(object):
         else:
             return False
 
+    def get_file_list(self):
+        self.cursor.execute('''
+            SELECT filename FROM photos ORDER_BY filename, date_taken
+        ''')
+        r = self.cursor.fetchall()
+        results = [x[0] for x in r]
+        return results
+
     def retrieve(self, filename):
         self.cursor.execute('''
-            SELECT filename, classification, detected_objects, latitude, longitude, date_taken, exif_data, thumbnail
+            SELECT filename, classification, detected_objects, latitude, longitude, date_taken, exif_data, thumbnail, bracket_exposure_value, bracket_mode, bracket_shot_count
             FROM photos
             WHERE filename = ?
         ''', ( filename, ))
@@ -114,14 +132,17 @@ class ProcessedImages(object):
             date_taken = datetime.datetime.fromtimestamp(r[5]),
             exif_data = exif_data,
             thumbnail = r[7],
-            bracket_exposure_value=0,
-            bracket_mode=0,
-            bracket_shot_count=0
+            bracket_exposure_value=r[8],
+            bracket_mode=r[9],
+            bracket_shot_count=r[10]
         )
         return p
     
     def commit(self):
-        self.conn.commit()
+        try:
+            self.conn.commit()
+        except:
+            pass
 
 
 class QueueingProcessedImages():
@@ -161,6 +182,7 @@ class QueueingProcessedImages():
                 break
             with self.lock:
                 self.p.add(item)
+                self.p.commit()
             self.add_queue.task_done()
 
     def process_hdr_queue(self):
@@ -184,6 +206,10 @@ class QueueingProcessedImages():
     def commit(self):
         # This should do nothing in the queueing version.
         pass
+
+    def get_file_list(self):
+        with self.lock:
+            return self.p.get_file_list()
 
     def retrieve(self, filename):
         # Blocking, until we can get the connection

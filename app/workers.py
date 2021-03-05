@@ -8,8 +8,11 @@ from map_maker import MapMaker
 from processed_images import QueueingProcessedImages, ProcessedImage
 
 from threading import Lock
+from queue import Queue
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 
+import logging
+logger = logging.getLogger(__name__)
 
 class DirectoryWorker(object):
     def __init__(
@@ -55,28 +58,29 @@ class DirectoryWorker(object):
         if not processed_file_callback:
             processed_file_callback = self.dummy_callback
 
-        with ThreadPoolExecutor(max_workers=32) as executor:
-            _ = [
+        with ThreadPoolExecutor() as executor:
+            results = [
                 executor.submit(
                     self.process_single_image_thread,
                     image_file=image_file, 
                     reprocess=reprocess, 
-                    find_hdr=find_hdr, 
                     processed_file_callback=processed_file_callback
                 )
                 for image_file in self.found_files
             ]
-
             # I need to check for bad results in all of these:
-            #wait(threads, return_when=ALL_COMPLETED)
+            wait(results, return_when=ALL_COMPLETED)
         processed_file_callback('All', 'done')
         self.processed_images.stop()
 
-    def process_single_image_thread(self, image_file, reprocess, find_hdr, processed_file_callback):
-        processed_file_callback(image_file, 'start')
+        # Scan data for HDRs
+        #print('Scanning for HDRs')
 
-        if find_hdr:
-            hdr_checker = HDRFinder(self.processed_images)
+        #for r in processed_images.get_file_list:
+
+
+    def process_single_image_thread(self, image_file, reprocess, processed_file_callback):
+        processed_file_callback(image_file, 'start')
 
         if self.processed_images.check_if_processed(image_file) and not reprocess:
             processed_file_callback(image_file, 'already_processed')
@@ -85,8 +89,6 @@ class DirectoryWorker(object):
         metadata = self.process_image(image_file)
 
         self.processed_images.add(metadata)
-        if find_hdr:
-            hdr_checker.check(metadata)
 
         self.processed_images.commit()
         processed_file_callback(image_file, 'end')
