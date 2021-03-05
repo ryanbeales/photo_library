@@ -96,7 +96,11 @@ class Image(object):
         with ExifTool() as e:
             self.exif_data = e.get_metadata(filename)[0]
 
-        self.date_taken = datetime.strptime(self.get_exif()['EXIF:DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
+
+        try:
+            self.date_taken = datetime.strptime(self.get_exif()['EXIF:DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
+        except:
+            self.date_taken = datetime.fromtimestamp(os.stat(filename).st_ctime)
             
         self.bracket_exposure_value = self.get_exif()['MakerNotes:BracketValue']
         self.bracket_mode = self.get_exif()['MakerNotes:BracketMode']
