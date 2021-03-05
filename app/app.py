@@ -3,7 +3,7 @@
 import time
 from datetime import timedelta
 from pprint import pprint
-from workers import Worker
+from workers import MultiDirectoryWorker
 
 import os
 
@@ -23,6 +23,7 @@ class Display():
 
 
     def display_callback(self, image_file, state):
+        # Make this add to a queue, then separate the display out in to it's own thread
         with self.lock:
             if state == 'start':
                 self.start_time = time.time()
@@ -51,28 +52,22 @@ class Display():
 paths = [
     # Selection of all cameras that produce RAW files:
     r'/work/stash/Photos/Canon EOS M5/2018/12/22',
-    r'/work/stash/Photos/60D/2012/05',
-    r'/work/stash/Photos/350D/2012/01/07',
-    r'/work/stash/Photos/Canon EOS M6 II/2019/12/02/CR3',
-    r'/work/stash/Photos/M3/2017/04/08/CR2',
+    #r'/work/stash/Photos/60D/2012/05',
+    #r'/work/stash/Photos/350D/2012/01/07',
+    #r'/work/stash/Photos/Canon EOS M6 II/2019/12/02/CR3',
+    #r'/work/stash/Photos/M3/2017/04/08/CR2',
 ]
 
 if __name__ == '__main__':
-    w = Worker(classifer=None, object_detector=None)
+    w = MultiDirectoryWorker(classifer=None, object_detector=None)
 
-    for path in paths:
-        print('')
-        print('')
-        print(f'scanning {path}')
-        w.set_directory(path)
-        total_files = w.get_total_files()
-        d = Display(total_files, progress_bar=True)
-        reprocess = False
-        if 'PHOTO_REPROCESS' in os.environ:
-            reprocess=True
-        w.scan(reprocess=reprocess, processed_file_callback=d.display_callback)
-
-        print(f'Queue depths: add queue: { w.get_add_queue_depth() }, hdr queue depth {w.get_hdr_queue_depth() }')
+    w.set_directory(paths)
+    total_files = w.get_total_files()
+    d = Display(total_files, progress_bar=True)
+    reprocess = False
+    if 'PHOTO_REPROCESS' in os.environ:
+        reprocess=True
+    w.scan(reprocess=reprocess, processed_file_callback=d.display_callback)
     print('')
     #print('Generating map')
     #w.make_map('/work/stash/src/classification_output/image_map.html')

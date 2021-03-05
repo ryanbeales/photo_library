@@ -11,7 +11,7 @@ from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 
 
-class Worker(object):
+class DirectoryWorker(object):
     def __init__(
         self,
         classifer=None,  #Classifier('/work/nasnet/nasnet_large.tflite', '/work/nasnet/labels.txt'),
@@ -39,44 +39,42 @@ class Worker(object):
         return self.found_files
 
     def set_directory(self, directory):
-        self.image_files = self.get_image_files(directory)
+        self.get_image_files(directory)
 
     def get_total_files(self):
-        return len(self.image_files)
+        return len(self.found_files)
 
     def dummy_callback(self, image_file, state):
         print(image_file, state)
 
-    def get_add_queue_depth(self):
-        return self.processed_images.get_add_queue_depth()
-    def get_hdr_queue_depth(self):
-        return self.processed_images.get_add_queue_depth()
-
+    def stop(self):
+        self.processed_images.stop()
 
     def scan(self, reprocess=False, find_hdr=True, processed_file_callback=None):
+        self.processed_images.start()
         if not processed_file_callback:
             processed_file_callback = self.dummy_callback
 
         with ThreadPoolExecutor(max_workers=32) as executor:
             _ = [
                 executor.submit(
-                    self.process_single_photo,
+                    self.process_single_image_thread,
                     image_file=image_file, 
                     reprocess=reprocess, 
                     find_hdr=find_hdr, 
                     processed_file_callback=processed_file_callback
                 )
-                for image_file in self.image_files
+                for image_file in self.found_files
             ]
 
-            # I don't think I need this...
+            # I need to check for bad results in all of these:
             #wait(threads, return_when=ALL_COMPLETED)
         processed_file_callback('All', 'done')
+        self.processed_images.stop()
 
-    def process_single_photo(self, image_file, reprocess, find_hdr, processed_file_callback):
+    def process_single_image_thread(self, image_file, reprocess, find_hdr, processed_file_callback):
         processed_file_callback(image_file, 'start')
 
-        worker = MetadataWorker(self.locations, self.classifer, self.object_detector)
         if find_hdr:
             hdr_checker = HDRFinder(self.processed_images)
 
@@ -84,7 +82,7 @@ class Worker(object):
             processed_file_callback(image_file, 'already_processed')
             return
 
-        metadata = worker.process_image(image_file)
+        metadata = self.process_image(image_file)
 
         self.processed_images.add(metadata)
         if find_hdr:
@@ -93,17 +91,10 @@ class Worker(object):
         self.processed_images.commit()
         processed_file_callback(image_file, 'end')
 
-
-class MetadataWorker(object):
-    def __init__(self, locations_source, classifier, object_detector):
-        self.locations = locations_source
-        self.classifier = classifier
-        self.object_detector = object_detector
-
     def process_image(self, filename, classify=True, detect_objects=True, get_location=True):
         image = Image(filename)    
         detected_objects = self.object_detector.detect(image) if self.object_detector and detect_objects else None
-        image_classification = self.classifier.classify_image(image) if self.classifier and classify else None
+        image_classification = self.classifer.classify_image(image) if self.classifer and classify else None
         location = self.locations.get_location_at_timestamp(image.get_photo_date()) if self.locations and get_location else None
 
         p = ProcessedImage(
@@ -120,3 +111,14 @@ class MetadataWorker(object):
         )
 
         return p
+
+class MultiDirectoryWorker(DirectoryWorker):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def set_directory(self, directories):
+        if type(directories) == list:
+            for directory in directories:
+                self.found_files = self.found_files + self.get_image_files(directory)
+        else:
+            super().set_directory(directories)

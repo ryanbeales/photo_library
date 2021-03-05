@@ -5,7 +5,7 @@ import os
 import sqlite3
 
 from threading import Thread, Lock
-from queue import Queue
+from queue import Queue, Empty
 
 @dataclass
 class ProcessedImage():
@@ -130,43 +130,49 @@ class QueueingProcessedImages():
         self.p = ProcessedImages(db_dir=db_dir)
         self.add_queue = Queue()
         self.hdr_queue = Queue()
+
+    def start(self):
         self.add_thread = Thread(target=self.process_add_queue)
         self.hdr_thread = Thread(target=self.process_hdr_queue)
         self.add_thread.start()
         self.hdr_thread.start()
 
-    def __del__(self):
-        # Delete queue.
+    def stop(self):
+        # This is working...
         self.p.commit()
-        self.p.__del__()
+
+        # Signal to threads that we want them to stop
         self.add_queue.put(None)
         self.hdr_queue.put(None)
-        self.add_thread.join()
-        self.hdr_thread.join()
 
-    def get_add_queue_depth(self):
-        return self.add_queue.qsize()
-    def get_hdr_queue_depth(self):
-        return self.hdr_queue.qsize()
+        # Wait for the queue processing to finish, which happens when the above is picked up
+        self.add_queue.join()
+        self.hdr_queue.join()
+
+        # Wait for threads to exit and join
+        self.add_thread.join()
+        self.hdr_thread.join()    
 
     def process_add_queue(self):
         while True:
             item = self.add_queue.get()
             if item is None:
+                self.add_queue.task_done()
                 break
             with self.lock:
                 self.p.add(item)
-                self.add_queue.task_done()
+            self.add_queue.task_done()
 
     def process_hdr_queue(self):
         while True:
             item = self.hdr_queue.get()
             if item is None:
+                self.hdr_queue.task_done()
                 break
             with self.lock:
                 self.p.create_hdr_set(item)
-                self.hdr_queue.task_done()
-            
+            self.hdr_queue.task_done()
+
     def add(self, metadata):
         # Place data in a queue, and return immediately
         self.add_queue.put(metadata)
