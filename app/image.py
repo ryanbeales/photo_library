@@ -45,6 +45,7 @@ class ExifTool(object):
         self.executable = executable
 
     def __enter__(self):
+        logger.debug('starting exiftool')
         self.process = subprocess.Popen(
             [self.executable, "-stay_open", "True",  "-@", "-"],
             universal_newlines=True,
@@ -54,6 +55,7 @@ class ExifTool(object):
     def  __exit__(self, exc_type, exc_value, traceback):
         self.process.stdin.write("-stay_open\nFalse\n")
         self.process.stdin.flush()
+        logger.debug('closed exiftool')
 
     def execute(self, *args):
         args = args + ("-execute\n",)
@@ -80,30 +82,36 @@ class Image(object):
         self.bracket_exposure_value = 0
 
     def load_file(self, filename):
+        logger.debug(f'loading {filename}')
         self.extension = os.path.splitext(filename)[-1].upper()
         if self.extension in ['.JPG', '.JPEG']:
             self.load_jpeg_file(filename)
         elif self.extension in ['.CR2', '.CR3']:
             self.load_raw_file(filename)
         else:
+            logger.debug(f"don't know how to open {filename}")
             raise Exception(f"I don't know how to open {self.extension}, sorry.")
 
     def load_jpeg_file(self, filename):
         self.img = PIL_Image.open(filename)
         self.make_exif(self.img.getexif())
         self.date_taken = datetime.strptime(self.get_exif()['DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
+        logger.debug(f'opened jpeg {filename} which was taken at {self.date_taken}')
 
     def load_raw_file(self, filename):
         # Load image data in as a PIL object
         with rawpy.imread(filename) as raw:
+            logger.debug(f'opening raw file: {filename}')
             self.img = PIL_Image.open(BytesIO(raw.extract_thumb().data))
         with ExifTool() as e:
+            logger.debug(f'sending {filename} to exiftool')
             self.exif_data = e.get_metadata(filename)[0]
 
 
         try:
             self.date_taken = datetime.strptime(self.get_exif()['EXIF:DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
         except:
+            logger.warning(f'unable to get date from exif data in {filename}, using file date')
             self.date_taken = datetime.fromtimestamp(os.stat(filename).st_ctime)
             
         self.bracket_exposure_value = self.get_exif()['MakerNotes:BracketValue']
@@ -112,6 +120,7 @@ class Image(object):
             self.bracket_shot_count = self.get_exif()['MakerNotes:AEBShotCount']
         else:
             self.bracket_shot_count = 3
+        logger.debug(f'AEB data on {filename}: {self.bracket_mode}, {self.bracket_exposure_value}. {self.bracket_shot_count}')
         
     def get_exif(self):
         return self.exif_data
@@ -139,12 +148,14 @@ class Image(object):
         return self.img
     
     def get_thumbnail(self):
+        logger.debug(f'generating thumbnail for {self.filename}')
         thumb = self.img.resize((64,64))
         buffered = BytesIO()
         thumb.save(buffered, format="JPEG")
         return base64.b64encode(buffered.getvalue())
 
     def get_fingerprint(self):
+        logger.debug(f'generating fingerprint for {self.filename}')
         # Blur, resize, greyscale, autocontrast
         blurred = self.img.filter(PIL_ImageFilter.GaussianBlur(radius=3))
         greyscale = PIL_ImageOps.grayscale(blurred)
@@ -152,4 +163,5 @@ class Image(object):
         return autocontrast.histogram()
 
     def compare(self, image2):
+        logger.debug(f'comparing {self.filename} and {image2.filename}')
         return stats.wasserstein_distance(self.get_fingerprint(), image2.get_fingerprint())

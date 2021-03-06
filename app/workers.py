@@ -31,6 +31,7 @@ class DirectoryWorker(object):
         self.found_files = []
     
     def get_image_files(self, base_dir, file_types=None):
+        logger.debug(f'finding files in {base_dir}')
         if not file_types:
             file_types = self.file_types
 
@@ -39,6 +40,7 @@ class DirectoryWorker(object):
                 fullpath = os.path.join(root, name)
                 if os.path.splitext(fullpath)[-1].upper() in file_types:
                     self.found_files.append(fullpath)
+        logger.info(f'found {len(self.found_files)} in {base_dir}')
         return self.found_files
 
     def set_directory(self, directory):
@@ -48,16 +50,19 @@ class DirectoryWorker(object):
         return len(self.found_files)
 
     def dummy_callback(self, image_file, state):
-        print(image_file, state)
+        logger.debug(f'dummy callback: {image_file}, {state}')
 
     def stop(self):
+        logger.debug('stop worker')
         self.processed_images.stop()
 
     def scan(self, reprocess=False, find_hdr=True, processed_file_callback=None):
+        logger.info('Starting scan')
         self.processed_images.start()
         if not processed_file_callback:
             processed_file_callback = self.dummy_callback
 
+        logger.info('Creating thread pool executor')
         with ThreadPoolExecutor() as executor:
             results = [
                 executor.submit(
@@ -69,10 +74,11 @@ class DirectoryWorker(object):
                 for image_file in self.found_files
             ]
             # I need to check for bad results in all of these:
+            logger.info('Waiting for all threads to finish')
             wait(results, return_when=ALL_COMPLETED)
         processed_file_callback('All', 'done')
         self.processed_images.stop()
-
+        logger.info('Finished scan')
         # Scan data for HDRs
         #print('Scanning for HDRs')
 
@@ -83,20 +89,27 @@ class DirectoryWorker(object):
         processed_file_callback(image_file, 'start')
 
         if self.processed_images.check_if_processed(image_file) and not reprocess:
+            logger.debug(f'already processed {image_file}')
             processed_file_callback(image_file, 'already_processed')
             return
 
+        logger.info(f'Processing {image_file}')
         metadata = self.process_image(image_file)
 
+        logger.info(f'Sending {image_file} metadata to processed images')
         self.processed_images.add(metadata)
 
         self.processed_images.commit()
         processed_file_callback(image_file, 'end')
 
     def process_image(self, filename, classify=True, detect_objects=True, get_location=True):
-        image = Image(filename)    
+        logger.debug(f'Loading Image {filename}')
+        image = Image(filename)
+    
         detected_objects = self.object_detector.detect(image) if self.object_detector and detect_objects else None
         image_classification = self.classifer.classify_image(image) if self.classifer and classify else None
+
+        logger.debug(f'Finding location for {filename}')
         location = self.locations.get_location_at_timestamp(image.get_photo_date()) if self.locations and get_location else None
 
         p = ProcessedImage(

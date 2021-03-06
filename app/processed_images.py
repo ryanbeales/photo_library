@@ -29,6 +29,7 @@ class ProcessedImages(object):
     def __init__(self, db_dir=None):
         self.db_file = db_dir + os.sep + 'images.db'
 
+        logger.info(f'Opening photo database {self.db_file}')
         self.conn = sqlite3.connect(self.db_file, check_same_thread=False)
         self.cursor = self.conn.cursor()
 
@@ -38,6 +39,7 @@ class ProcessedImages(object):
         self.conn.close()
 
     def load(self):
+        logger.debug('Create table if not exists')
         self.cursor.executescript('''
             CREATE TABLE IF NOT EXISTS photos (
                 filename TEXT NOT NULL PRIMARY KEY,
@@ -78,6 +80,7 @@ class ProcessedImages(object):
             metadata.bracket_mode,
             metadata.bracket_shot_count
         )
+        logger.debug(f'INSERT or REPLACE row for {metadata.filename}')
         self.cursor.execute('''
             REPLACE INTO photos VALUES (?,?,?,?,?,?,?,?,?,?,?)  
         ''', insert_values)
@@ -85,13 +88,14 @@ class ProcessedImages(object):
     def create_hdr_set(self, filenames):
         name = '-'.join([os.path.basename(i.filename) for i in filenames])
         inserts = [(name, i.filename) for i in filenames]
-        print(f'creating hdr set {name} = {inserts}')
+        logger.debug(f'creating hdr set {name} = {inserts}')
         for insert in inserts:
             self.cursor.execute('''
                 REPLACE INTO hdr_groups VALUES (?,?)
             ''', insert)
 
     def check_if_processed(self, filename):
+        logger.debug(f'Checking if {filename} already exists in DB')
         self.cursor.execute('''
             SELECT EXISTS(SELECT 1 FROM photos WHERE filename=?)
         ''', ( filename, ))
@@ -102,6 +106,7 @@ class ProcessedImages(object):
             return False
 
     def get_file_list(self):
+        logger.debug(f'Get list of all filenames ordered by date taken')
         self.cursor.execute('''
             SELECT filename FROM photos ORDER_BY filename, date_taken
         ''')
@@ -110,6 +115,7 @@ class ProcessedImages(object):
         return results
 
     def retrieve(self, filename):
+        logger.debug(f'Retreive data for {filename}')
         self.cursor.execute('''
             SELECT filename, classification, detected_objects, latitude, longitude, date_taken, exif_data, thumbnail, bracket_exposure_value, bracket_mode, bracket_shot_count
             FROM photos
@@ -139,20 +145,24 @@ class ProcessedImages(object):
         return p
     
     def commit(self):
+        logger.debug('commit called')
         try:
             self.conn.commit()
         except:
+            logger.error('commit failed')
             pass
 
 
 class QueueingProcessedImages():
     def __init__(self, db_dir=None):
+        logger.debug('Created processed images queue')
         self.lock = Lock()
         self.p = ProcessedImages(db_dir=db_dir)
         self.add_queue = Queue()
         self.hdr_queue = Queue()
 
     def start(self):
+        logger.debug('Starting processed images queue')
         self.add_thread = Thread(target=self.process_add_queue)
         self.hdr_thread = Thread(target=self.process_hdr_queue)
         self.add_thread.start()
@@ -160,27 +170,35 @@ class QueueingProcessedImages():
 
     def stop(self):
         # This is working...
+        logger.debug('Stopping processed images queue')
+        logger.debug('Sending commit')
         self.p.commit()
 
         # Signal to threads that we want them to stop
+        logger.debug('Sending None to queues to stop')
         self.add_queue.put(None)
         self.hdr_queue.put(None)
 
         # Wait for the queue processing to finish, which happens when the above is picked up
+        logger.debug('Waiting for queues to finish processing')
         self.add_queue.join()
         self.hdr_queue.join()
 
         # Wait for threads to exit and join
+        logger.debug('Waiting for threads to finish')
         self.add_thread.join()
-        self.hdr_thread.join()    
+        self.hdr_thread.join()
+        logger.debug('Stopped processed images queue')    
 
     def process_add_queue(self):
         while True:
             item = self.add_queue.get()
             if item is None:
                 self.add_queue.task_done()
+                logger.debug('add queue recieved shutdown signal')
                 break
             with self.lock:
+                logger.debug(f'retrieved item from add queue, {self.add_queue.qsize()} items remaining')
                 self.p.add(item)
                 self.p.commit()
             self.add_queue.task_done()
@@ -190,8 +208,10 @@ class QueueingProcessedImages():
             item = self.hdr_queue.get()
             if item is None:
                 self.hdr_queue.task_done()
+                logger.debug('hdr queue recieved shutdown signal')
                 break
             with self.lock:
+                logger.debug(f'retrieved item from hdr queue, {self.hdr_queue.qsize()} items remaining')
                 self.p.create_hdr_set(item)
             self.hdr_queue.task_done()
 

@@ -29,15 +29,19 @@ class Locations:
     def __init__(self, history_file=None, history_db_dir=None, enable_geopy=False):
         self.location_database_name = history_db_dir + os.sep + 'locations.db'
 
+        logger.info(f'Opening location database {self.location_database_name}')
         self.conn = sqlite3.connect(self.location_database_name, check_same_thread=False)
         self.cursor = self.conn.cursor()
         self.lock = Lock()
 
+        logger.debug(f'checking if database is current')
         if not self.check_database_current(history_file):
+            logger.warning(f'database is out of date with {history_file}, reloading')
             self.load_json_data(history_file)
 
         self.enable_geopy = enable_geopy
         if self.enable_geopy:
+            logger.info('geopy enabled')
             self.geolocator = Nominatim(user_agent="RB PhotoGeoCoder")
             self.reverse = RateLimiter(self.geolocator.reverse, min_delay_seconds=2)
 
@@ -45,6 +49,7 @@ class Locations:
         self.conn.close()
 
     def create_tables(self):
+        logger.debug('creating location database tables if not exists')
         self.cursor.executescript('''
             CREATE TABLE IF NOT EXISTS locations (
                 timestamp INTEGER,
@@ -62,7 +67,10 @@ class Locations:
         self.cursor.execute('SELECT timestamp from historytimestamp;')
         r = self.cursor.fetchone()
 
-        if r and r[0] == int(os.stat(filename).st_ctime):
+        history_file_version = int(os.stat(filename).st_ctime)
+        logger.debug(f'database version = {r[0]}, history file version = {history_file_version}')
+
+        if r and r[0] == history_file_version:
             return True
         return False
 
@@ -70,10 +78,12 @@ class Locations:
         # Get a lock if we're loading everything in
         with self.lock:
             self.create_tables()
+            logger.debug('delete all data')
             self.cursor.execute('DELETE FROM locations')
             self.cursor.execute('DELETE FROM historytimestamp')
             self.cursor.execute('INSERT INTO historytimestamp VALUES (?)', (int(os.stat(jsonfile).st_ctime), ))
 
+            logger.info(f'load data from {jsonfile}')
             with open(jsonfile) as f:
                 locations=json.load(f)
 
@@ -84,6 +94,8 @@ class Locations:
                 accuracy = l['accuracy'] if 'accuracy' in l else -1
 
                 self.cursor.execute('INSERT INTO locations VALUES(?, ?, ?, ?);', (timestamp, lat, lng, accuracy))
+
+            logger.info(f"{len(locations['locations'])} locations loaded")
             self.conn.commit()
 
     def get_location_at_timestamp(self, timestamp):
@@ -121,6 +133,7 @@ class Locations:
             lat = r[0][0] / 1e7
             lng = r[0][1] / 1e7
 
+        logger.debug(f'location at timestamp {timestamp} = {lat},{lng}')
         return [lat,lng]
 
 if __name__ == '__main__':

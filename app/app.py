@@ -64,23 +64,33 @@ if __name__ == '__main__':
     logging.basicConfig(
         filename=r'/work/stash/src/classification_output/images.log', 
         filemode='w', 
-        encoding='utf-8',
-        format='%(asctime)s %(name)s %(levelname)s %(message)s',
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%m/%d/%Y %I:%M:%S %p',
         level=logging.DEBUG
     )
     logger = logging.getLogger(__name__)
 
-    logger.info
+    logger.debug('Creating worker object')
     w = MultiDirectoryWorker(classifer=None, object_detector=None)
 
+    logging.debug(f'Setting paths to process: {paths}')
     w.set_directory(paths)
+
     total_files = w.get_total_files()
+    logging.info(f'total files to process {total_files}')
+
+    logging.debug('creating display object')
     d = Display(total_files, progress_bar=True)
     reprocess = False
     if 'PHOTO_REPROCESS' in os.environ:
         reprocess=True
+
+    logging.info(f'reprocessing of files set to {reprocess}')
+    logging.debug('starting scan of paths')
     w.scan(reprocess=reprocess, processed_file_callback=d.display_callback)
+    logging.debug('finished scanning all files')
     print('')
+
     #print('Generating map')
     #w.make_map('/work/stash/src/classification_output/image_map.html')
     #print('Done!')
