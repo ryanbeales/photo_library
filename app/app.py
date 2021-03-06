@@ -47,9 +47,10 @@ class Display():
                     print(f"Finished processing {image_file}")
                     print("Time on image: ", self.end_time-self.start_time)
                     print(f"Approximate time left: {time_left}")
-
             elif state == 'done':
                 self.progress.finish()
+                # Monitor queue size?
+                print('waiting for queue to empty...')
 
 paths = [
     # Selection of all cameras that produce RAW files:

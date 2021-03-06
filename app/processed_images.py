@@ -28,17 +28,13 @@ class ProcessedImage():
 class ProcessedImages(object):
     def __init__(self, db_dir=None):
         self.db_file = db_dir + os.sep + 'images.db'
-
+        
+    def load(self):
         logger.info(f'Opening photo database {self.db_file}')
+
         self.conn = sqlite3.connect(self.db_file, check_same_thread=False)
         self.cursor = self.conn.cursor()
 
-        self.load()
-        
-    def __del__(self):
-        self.conn.close()
-
-    def load(self):
         logger.debug('Create table if not exists')
         self.cursor.executescript('''
             CREATE TABLE IF NOT EXISTS photos (
@@ -151,6 +147,10 @@ class ProcessedImages(object):
         except:
             logger.error('commit failed')
             pass
+    
+    def close(self):
+        logger.debug('closing database')
+        self.conn.close()
 
 
 class QueueingProcessedImages():
@@ -163,17 +163,13 @@ class QueueingProcessedImages():
 
     def start(self):
         logger.debug('Starting processed images queue')
+        self.p.load()
         self.add_thread = Thread(target=self.process_add_queue)
         self.hdr_thread = Thread(target=self.process_hdr_queue)
         self.add_thread.start()
         self.hdr_thread.start()
 
     def stop(self):
-        # This is working...
-        logger.debug('Stopping processed images queue')
-        logger.debug('Sending commit')
-        self.p.commit()
-
         # Signal to threads that we want them to stop
         logger.debug('Sending None to queues to stop')
         self.add_queue.put(None)
@@ -188,7 +184,13 @@ class QueueingProcessedImages():
         logger.debug('Waiting for threads to finish')
         self.add_thread.join()
         self.hdr_thread.join()
-        logger.debug('Stopped processed images queue')    
+        logger.debug('Stopped processed images queue')
+
+        logger.debug('Stopping processed images queue')
+        logger.debug('Sending commit')
+        self.p.commit()
+        self.p.close()
+
 
     def process_add_queue(self):
         while True:
@@ -200,7 +202,6 @@ class QueueingProcessedImages():
             with self.lock:
                 logger.debug(f'retrieved item from add queue, {self.add_queue.qsize()} items remaining')
                 self.p.add(item)
-                self.p.commit()
             self.add_queue.task_done()
 
     def process_hdr_queue(self):

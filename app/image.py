@@ -29,46 +29,10 @@ import base64
 
 import scipy.stats as stats
 
-
-import subprocess
-import os
-import json
+from exiftool import ExifTool
 
 import logging
 logger = logging.getLogger(__name__)
-
-
-class ExifTool(object):
-    sentinel = "{ready}" + os.linesep
-
-    def __init__(self, executable="exiftool"):
-        self.executable = executable
-
-    def __enter__(self):
-        logger.debug('starting exiftool')
-        self.process = subprocess.Popen(
-            [self.executable, "-stay_open", "True",  "-@", "-"],
-            universal_newlines=True,
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        return self
-
-    def  __exit__(self, exc_type, exc_value, traceback):
-        self.process.stdin.write("-stay_open\nFalse\n")
-        self.process.stdin.flush()
-        logger.debug('closed exiftool')
-
-    def execute(self, *args):
-        args = args + ("-execute\n",)
-        self.process.stdin.write(str.join("\n", args))
-        self.process.stdin.flush()
-        output = ""
-        fd = self.process.stdout.fileno()
-        while not output.endswith(self.sentinel):
-            output += os.read(fd, 4096).decode('utf-8')
-        return output[:-len(self.sentinel)]
-
-    def get_metadata(self, *filenames):
-        return json.loads(self.execute("-G", "-j", "-n", *filenames))
 
 
 class Image(object):
@@ -120,7 +84,7 @@ class Image(object):
             self.bracket_shot_count = self.get_exif()['MakerNotes:AEBShotCount']
         else:
             self.bracket_shot_count = 3
-        logger.debug(f'AEB data on {filename}: {self.bracket_mode}, {self.bracket_exposure_value}. {self.bracket_shot_count}')
+        logger.debug(f'AEB data on {filename}: {self.bracket_mode}, {self.bracket_exposure_value}, {self.bracket_shot_count}')
         
     def get_exif(self):
         return self.exif_data
