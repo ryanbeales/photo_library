@@ -10,7 +10,6 @@ from queue import Queue, Empty
 import logging
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class ProcessedImage():
     filename: str
@@ -32,11 +31,11 @@ class ProcessedImages(object):
     def load(self):
         logger.info(f'Opening photo database {self.db_file}')
 
-        self.conn = sqlite3.connect(self.db_file, check_same_thread=False)
-        self.cursor = self.conn.cursor()
+        self.conn = sqlite3.connect(self.db_file, check_same_thread=False, isolation_level=None)
 
         logger.debug('Create table if not exists')
-        self.cursor.executescript('''
+        c = self.conn.cursor()
+        c.executescript('''
             CREATE TABLE IF NOT EXISTS photos (
                 filename TEXT NOT NULL PRIMARY KEY,
                 classification TEXT,
@@ -54,13 +53,9 @@ class ProcessedImages(object):
             CREATE UNIQUE INDEX IF NOT EXISTS photos_filename_ids on photos(filename);
             
             PRAGMA foreign_keys = ON;
-            
-            CREATE TABLE IF NOT EXISTS hdr_groups (
-                name TEXT NOT NULL PRIMARY KEY,
-                filename TEXT,
-                FOREIGN KEY(filename) REFERENCES photos(filename)
-            );
+            PRAGMA journal_mode = MEMORY;
         ''')
+        self.conn.commit()
 
     def add(self, metadata):
         insert_values = (
@@ -77,48 +72,65 @@ class ProcessedImages(object):
             metadata.bracket_shot_count
         )
         logger.debug(f'INSERT or REPLACE row for {metadata.filename}')
-        self.cursor.execute('''
-            REPLACE INTO photos VALUES (?,?,?,?,?,?,?,?,?,?,?)  
-        ''', insert_values)
+        try:
+            c = self.conn.cursor()
+            c.execute('''
+                REPLACE INTO 
+                photos (filename, classification, detected_objects, latitude, longitude, date_taken, exif_data, thumbnail, bracket_exposure_value, bracket_mode, bracket_shot_count) 
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)  
+            ''', insert_values)
+            self.conn.commit()
+            c.close()
+        except sqlite3.IntegrityError:
+                logger.error(f'Failed to insert {metadata.filename}')
 
     def create_hdr_set(self, filenames):
         name = '-'.join([os.path.basename(i.filename) for i in filenames])
         inserts = [(name, i.filename) for i in filenames]
         logger.debug(f'creating hdr set {name} = {inserts}')
         for insert in inserts:
-            self.cursor.execute('''
+            c = self.conn.cursor()
+            c.execute('''
                 REPLACE INTO hdr_groups VALUES (?,?)
             ''', insert)
+            self.conn.commit()
+            c.close()
 
     def check_if_processed(self, filename):
         logger.debug(f'Checking if {filename} already exists in DB')
-        self.cursor.execute('''
+        
+        c = self.conn.cursor()
+        c.execute('''
             SELECT EXISTS(SELECT 1 FROM photos WHERE filename=?)
         ''', ( filename, ))
-        r = self.cursor.fetchone()
+        r = c.fetchone()
+        c.close()
         if r[0] == 1:
+            logger.warning(f'Already exists {filename}')
             return True
         else:
             return False
 
     def get_file_list(self):
         logger.debug(f'Get list of all filenames ordered by date taken')
-        self.cursor.execute('''
+        c = self.conn.cursor()
+        c.execute('''
             SELECT filename FROM photos ORDER_BY filename, date_taken
         ''')
-        r = self.cursor.fetchall()
+        r = c.fetchall()
         results = [x[0] for x in r]
         return results
 
     def retrieve(self, filename):
         logger.debug(f'Retreive data for {filename}')
-        self.cursor.execute('''
+        c = self.conn.cursor()
+        c.execute('''
             SELECT filename, classification, detected_objects, latitude, longitude, date_taken, exif_data, thumbnail, bracket_exposure_value, bracket_mode, bracket_shot_count
             FROM photos
             WHERE filename = ?
         ''', ( filename, ))
-        r = self.cursor.fetchone()
-
+        r = c.fetchone()
+        c.close()
         if r == None:
             return None
 

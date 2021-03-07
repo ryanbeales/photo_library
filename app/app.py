@@ -2,6 +2,8 @@
 
 import logging
 
+logging.getLogger('PIL.TiffImagePlugin').setLevel(logging.ERROR)
+
 import time
 from datetime import timedelta
 from pprint import pprint
