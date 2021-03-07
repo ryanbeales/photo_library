@@ -134,6 +134,6 @@ class MultiDirectoryWorker(DirectoryWorker):
     def set_directory(self, directories):
         if type(directories) == list:
             for directory in directories:
-                self.found_files = self.found_files + self.get_image_files(directory)
+                super().set_directory(directory)
         else:
             super().set_directory(directories)
