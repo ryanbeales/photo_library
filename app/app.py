@@ -56,11 +56,11 @@ class Display():
 
 paths = [
     # Selection of all cameras that produce RAW files:
-    r'/work/stash/Photos/Canon EOS M5/2018/12/22',
-    r'/work/stash/Photos/60D/2012/05/05',
-    r'/work/stash/Photos/350D/2012/01/07',
-    r'/work/stash/Photos/Canon EOS M6 II/2019/12/02/CR3',
-    r'/work/stash/Photos/M3/2017/04/08/CR2',
+    r'/work/stash/Photos/Canon EOS M5',
+    r'/work/stash/Photos/60D',
+    r'/work/stash/Photos/350D',
+    r'/work/stash/Photos/Canon EOS M6 II',
+    r'/work/stash/Photos/M3',
 ]
 
 if __name__ == '__main__':
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
 
     logger.debug('Creating worker object')
-    w = MultiDirectoryWorker(classifer=None, object_detector=None)
+    w = MultiDirectoryWorker()
 
     logging.debug(f'Setting paths to process: {paths}')
     w.set_directory(paths)

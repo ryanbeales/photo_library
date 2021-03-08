@@ -1,0 +1,24 @@
+# python 3.9 on ubuntu base
+FROM python:3.9-buster
+
+RUN mkdir /work
+
+# # Refresh sources to install vim - Removed since we only need this when interactive
+# RUN apt update
+# RUN apt install -y vim
+
+# Install latest exiftool as per https://exiftool.org/install.html#Unix
+WORKDIR /work
+RUN wget https://exiftool.org/Image-ExifTool-12.21.tar.gz
+RUN gzip -dc Image-ExifTool-12.21.tar.gz | tar -xf -
+WORKDIR /work/Image-ExifTool-12.21
+RUN perl Makefile.PL; make install
+
+# Install all python package dependancies
+RUN pip install pillow psutil geopy rawpy folium scipy pyexiftool progress dataclasses
+
+# Copy application files 
+COPY app /work/app
+
+WORKDIR /work/app
+ENTRYPOINT [ "python", "/work/app/app.py" ]

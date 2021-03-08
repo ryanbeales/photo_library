@@ -2,9 +2,9 @@ import os
 from image import Image
 #from classifier import Classifier
 #from objectdetector import ObjectDetector
-from locations import Locations
-from hdr_finder import HDRFinder
-from map_maker import MapMaker
+#from locations import Locations
+#from hdr_finder import HDRFinder
+#from map_maker import MapMaker
 from processed_images import QueueingProcessedImages, ProcessedImage
 
 from threading import Lock
@@ -17,15 +17,12 @@ logger = logging.getLogger(__name__)
 class DirectoryWorker(object):
     def __init__(
         self,
-        classifer=None,  #Classifier('/work/nasnet/nasnet_large.tflite', '/work/nasnet/labels.txt'),
-        object_detector=None, #ObjectDetector('/work/object_detector'),
-        locations=Locations(history_file=r'/work/stash/Backup/Google Location History/Location History.json', history_db_dir='/work/stash/src/classification_output/'),
+        #classifer=None,  #Classifier('/work/nasnet/nasnet_large.tflite', '/work/nasnet/labels.txt'),
+        #object_detector=None, #ObjectDetector('/work/object_detector'),
+        #locations=Locations(history_file=r'/work/stash/Backup/Google Location History/Location History.json', history_db_dir='/work/stash/src/classification_output/'),
         processed_images=QueueingProcessedImages(db_dir='/work/stash/src/classification_output/'),
         file_types=['.CR2', '.CR3', '.JPG']
     ):
-        self.classifer = classifer
-        self.object_detector = object_detector
-        self.locations = locations
         self.processed_images = processed_images
         self.file_types = file_types
         self.found_files = []
@@ -56,7 +53,7 @@ class DirectoryWorker(object):
         logger.debug('stop worker')
         self.processed_images.stop()
 
-    def scan(self, reprocess=False, find_hdr=True, processed_file_callback=None):
+    def scan(self, reprocess=False, processed_file_callback=None):
         logger.info('Starting scan')
         self.processed_images.start()
         if not processed_file_callback:
@@ -102,26 +99,17 @@ class DirectoryWorker(object):
         self.processed_images.commit()
         processed_file_callback(image_file, 'end')
 
-    def process_image(self, filename, classify=True, detect_objects=True, get_location=True):
+    def process_image(self, filename):
         logger.debug(f'Loading Image {filename}')
         image = Image(filename)
     
-        detected_objects = self.object_detector.detect(image) if self.object_detector and detect_objects else None
-        image_classification = self.classifer.classify_image(image) if self.classifer and classify else None
-
-        logger.debug(f'Finding location for {filename}')
-        location = self.locations.get_location_at_timestamp(image.get_photo_date()) if self.locations and get_location else None
+        #logger.debug(f'Finding location for {filename}')
+        #location = self.locations.get_location_at_timestamp(image.get_photo_date()) if self.locations and get_location else None
 
         p = ProcessedImage(
             filename=filename,
-            classification=image_classification,
-            detected_objects=detected_objects,
-            location=location,
             date_taken=image.get_photo_date(),
             exif_data = image.get_json_safe_exif(),
-            bracket_shot_count = image.bracket_shot_count,
-            bracket_mode=image.bracket_mode,
-            bracket_exposure_value=image.bracket_exposure_value,
             thumbnail=image.get_thumbnail().decode('utf-8')
         )
 

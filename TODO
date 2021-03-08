@@ -10,7 +10,10 @@
 # - Let tensorflow download models from hub? Maybe after we're confident it all works.
 # - This https://stackoverflow.com/a/13517771 or https://en.wikipedia.org/wiki/Earth_mover%27s_distance to find similar images.
 # - A way to query/display all this...
-#
+# - Make it a pipeline? Load image and exif data, then separate HDR, panorama, object detection processes in different container types all loading from the DB?
+#   They'd all be different database tables then using the filenames as keys?
+#   Pipeline can use external queues for notifications? and separate DB storage? Maybe apache airflow?
+
 # Done:
 # - Logging!! - DONE
 # - Threading for image processing? How can I do that. - DONE
