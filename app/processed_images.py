@@ -34,7 +34,7 @@ class ProcessedImages(object):
                 filename TEXT NOT NULL PRIMARY KEY,
                 date_taken INTEGER,
                 exif_data TEXT,
-                thumbnail TEXT,
+                thumbnail TEXT
             );
 
             CREATE UNIQUE INDEX IF NOT EXISTS photos_filename_ids on photos(filename);
