@@ -7,7 +7,8 @@ logging.getLogger('PIL.TiffImagePlugin').setLevel(logging.ERROR)
 import time
 from datetime import timedelta
 from pprint import pprint
-from workers import MultiDirectoryWorker
+
+from ingest.workers import MultiDirectoryWorker
 
 import os
 
@@ -56,11 +57,11 @@ class Display():
 
 paths = [
     # Selection of all cameras that produce RAW files:
-    r'/work/stash/Photos/Canon EOS M5',
-    r'/work/stash/Photos/60D',
-    r'/work/stash/Photos/350D',
-    r'/work/stash/Photos/Canon EOS M6 II',
-    r'/work/stash/Photos/M3',
+    r'/work/stash/Photos/Canon EOS M5/2019/02/16/CR2',
+    # r'/work/stash/Photos/60D',
+    # r'/work/stash/Photos/350D',
+    # r'/work/stash/Photos/Canon EOS M6 II',
+    # r'/work/stash/Photos/M3',
 ]
 
 if __name__ == '__main__':

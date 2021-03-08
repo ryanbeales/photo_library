@@ -10,7 +10,6 @@ from threading import Lock
 import logging
 logger = logging.getLogger(__name__)
 
-
 class Locations:
     """
     {
@@ -26,7 +25,7 @@ class Locations:
             "accuracy" : 1046
         },
     """
-    def __init__(self, history_file=None, history_db_dir=None, enable_geopy=False):
+    def __init__(self, history_file=None, history_db_dir=None, enable_geopy=False, reload=False):
         self.location_database_name = history_db_dir + os.sep + 'locations.db'
 
         logger.info(f'Opening location database {self.location_database_name}')
@@ -34,10 +33,11 @@ class Locations:
         self.cursor = self.conn.cursor()
         self.lock = Lock()
 
-        logger.debug(f'checking if database is current')
-        if not self.check_database_current(history_file):
-            logger.warning(f'database is out of date with {history_file}, reloading')
-            self.load_json_data(history_file)
+        if reload:
+            logger.debug(f'checking if database is current')
+            if not self.check_database_current(history_file):
+                logger.warning(f'database is out of date with {history_file}, reloading')
+                self.load_json_data(history_file)
 
         self.enable_geopy = enable_geopy
         if self.enable_geopy:
@@ -135,6 +135,3 @@ class Locations:
 
         logger.debug(f'location at timestamp {timestamp} = {lat},{lng}')
         return [lat,lng]
-
-if __name__ == '__main__':
-    locations=Locations(history_file=r'S:\Backup\Google Location History\Location History.json', history_db_dir=r'S:\src\classification_output')

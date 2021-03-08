@@ -1,0 +1,7 @@
+FROM photoingest:latest
+RUN mkdir /work
+
+# Install all python package dependancies
+RUN pip install geopy
+WORKDIR /work/app
+ENTRYPOINT [ "python", "/work/app/locations_app.py" ]

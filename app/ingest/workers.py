@@ -1,11 +1,7 @@
 import os
-from image import Image
-#from classifier import Classifier
-#from objectdetector import ObjectDetector
-#from locations import Locations
-#from hdr_finder import HDRFinder
-#from map_maker import MapMaker
-from processed_images import QueueingProcessedImages, ProcessedImage
+from ingest.image import Image
+
+from processed_images.processed_images import QueueingProcessedImages, ProcessedImage
 
 from threading import Lock
 from queue import Queue
@@ -19,7 +15,6 @@ class DirectoryWorker(object):
         self,
         #classifer=None,  #Classifier('/work/nasnet/nasnet_large.tflite', '/work/nasnet/labels.txt'),
         #object_detector=None, #ObjectDetector('/work/object_detector'),
-        #locations=Locations(history_file=r'/work/stash/Backup/Google Location History/Location History.json', history_db_dir='/work/stash/src/classification_output/'),
         processed_images=QueueingProcessedImages(db_dir='/work/stash/src/classification_output/'),
         file_types=['.CR2', '.CR3', '.JPG']
     ):

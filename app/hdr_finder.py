@@ -2,6 +2,7 @@ from datetime import timedelta
 import logging
 logger = logging.getLogger(__name__)
 
+from processed_images.processed_images import ProcessedImages, ProcessedImage
 
 class HDRFinder(object):
     def __init__(self, processed_image=None, max_duration_for_set=5):
@@ -26,3 +27,11 @@ class HDRFinder(object):
 
                     logger.debug('resetting hdr group list to find more')
                     self.HDR_group = []
+
+if __name__ == '__main__':
+    # Scan for HDRs.
+    photos = ProcessedImages(db_dir='/work/stash/src/classification_output/')
+    for photo in photos.get_file_list():
+        p = photos.retrieve(photo)
+        print(f'Photo: {p.filename} taken at {p.date_taken}')
+    

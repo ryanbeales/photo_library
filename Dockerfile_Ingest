@@ -15,10 +15,10 @@ WORKDIR /work/Image-ExifTool-12.21
 RUN perl Makefile.PL; make install
 
 # Install all python package dependancies
-RUN pip install pillow psutil geopy rawpy folium scipy pyexiftool progress dataclasses
+RUN pip install pillow psutil rawpy folium scipy pyexiftool progress dataclasses
 
 # Copy application files 
 COPY app /work/app
 
 WORKDIR /work/app
-ENTRYPOINT [ "python", "/work/app/app.py" ]
+ENTRYPOINT [ "python", "/work/app/ingest_app.py" ]
