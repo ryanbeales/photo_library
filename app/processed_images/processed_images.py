@@ -30,10 +30,10 @@ class ProcessedImages(object):
 
         #self.conn = sqlite3.connect(self.db_file, check_same_thread=False, isolation_level=None)
         self.conn = create_engine('sqlite:///' + self.db_file)
+        self.conn.isolation_level = 'AUTOCOMMIT'
 
         logger.debug('Create table if not exists')
-        c = self.conn
-        c.execute('''
+        self.conn.execute('''
             CREATE TABLE IF NOT EXISTS photos (
                 filename TEXT NOT NULL PRIMARY KEY,
                 filetype TEXT NOT NULL,
@@ -45,9 +45,12 @@ class ProcessedImages(object):
             );
         ''')
 
-        c.execute('''CREATE UNIQUE INDEX IF NOT EXISTS photos_filename_ids on photos(filename);''')
-        c.execute('''PRAGMA foreign_keys = ON;''')
-        c.execute('''PRAGMA journal_mode = MEMORY;''')
+        self.conn.execute('''CREATE UNIQUE INDEX IF NOT EXISTS photos_filename_ids on photos(filename);''')
+        self.conn.execute('''PRAGMA foreign_keys = ON;''')
+        self.conn.execute('''PRAGMA journal_mode = MEMORY;''')
+
+    def start(self):
+        self.load()
 
     def add(self, metadata):
         insert_values = (
@@ -59,14 +62,13 @@ class ProcessedImages(object):
         )
         logger.debug(f'INSERT or REPLACE row for {metadata.filename}')
         try:
-            c = self.conn #.cursor()
-            c.execute('''
-                REPLACE INTO 
-                photos (filename, filetype, date_taken, exif_data, thumbnail) 
-                VALUES (?,?,?,?,?)  
-            ''', insert_values)
-            #self.conn.commit()
-            #c.close()
+            conn = create_engine('sqlite:///' + self.db_file)
+            with conn.begin():
+                conn.execute('''
+                    REPLACE INTO 
+                    photos (filename, filetype, date_taken, exif_data, thumbnail) 
+                    VALUES (?,?,?,?,?)  
+                ''', insert_values)
         except Exception as e:
                 logger.error(f'Failed to insert {metadata.filename}: {e}')
 
@@ -75,18 +77,14 @@ class ProcessedImages(object):
         inserts = [(name, i.filename) for i in filenames]
         logger.debug(f'creating hdr set {name} = {inserts}')
         for insert in inserts:
-            c = self.conn
-            c.execute('''
+            self.conn.execute('''
                 REPLACE INTO hdr_groups VALUES (?,?)
             ''', insert)
-            self.conn.commit()
-            c.close()
 
     def check_if_processed(self, filename):
         logger.debug(f'Checking if {filename} already exists in DB')
         
-        c = self.conn
-        rs = c.execute('''
+        rs = self.conn.execute('''
             SELECT EXISTS(SELECT 1 FROM photos WHERE filename=?)
         ''', ( filename, ))
         r = rs.fetchone()
@@ -99,8 +97,7 @@ class ProcessedImages(object):
 
     def get_file_list(self):
         logger.debug(f'Get list of all filenames ordered by date taken')
-        c = self.conn
-        rs = c.execute('''
+        rs = self.conn.execute('''
             SELECT filename FROM photos ORDER BY filename, date_taken
         ''')
         r = rs.fetchall()
@@ -109,8 +106,7 @@ class ProcessedImages(object):
 
     def get_raw_files(self):
         logger.debug(f'Get list of all filenames ordered by date taken')
-        c = self.conn
-        rs = c.execute('''
+        rs = self.conn.execute('''
             SELECT filename FROM photos WHERE filetype = 'RAW' ORDER BY filename, date_taken
         ''')
         r = rs.fetchall()
@@ -119,8 +115,7 @@ class ProcessedImages(object):
 
     def get_empty_locations(self):
         logger.debug(f'Get list of all filenames that do not have any location data')
-        c = self.conn
-        rs = c.execute('''
+        rs = self.conn.execute('''
             SELECT filename, date_taken FROM photos WHERE latitude IS NULL and longitude IS NULL ORDER BY filename, date_taken
         ''')
         r = rs.fetchall()
@@ -129,16 +124,13 @@ class ProcessedImages(object):
 
     def set_location(self, filename, lat, lng):
         logger.debug(f'Adding coords for {filename}')
-        c = self.conn
-        c.execute('''
+        self.conn.execute('''
             UPDATE photos SET (latitude = ?, longitude = ?) WHERE filename = ?
         ''', (lat, lng, filename, ))
-        #c.close()
 
     def retrieve(self, filename):
         logger.debug(f'Retreive data for {filename}')
-        c = self.conn
-        rs = c.execute('''
+        rs = self.conn.execute('''
             SELECT filename, filetype, date_taken, exif_data, thumbnail, latitude, longitude
             FROM photos
             WHERE filename = ?
@@ -168,17 +160,42 @@ class ProcessedImages(object):
         logger.debug('closing database')
         self.conn.close()
 
+    def stop(self):
+        self.close()
 
-class QueueingProcessedImages():
+
+class LockingProcessedImages(ProcessedImages):
     def __init__(self, db_dir=None):
-        logger.debug('Created processed images queue')
+        super().__init__(db_dir)
         self.lock = Lock()
-        self.p = ProcessedImages(db_dir=db_dir)
+
+    def add(self, metadata):
+        with self.lock:
+            super().add(metadata)
+
+    def get_file_list(self):
+        with self.lock:
+            return super().get_file_list()
+
+    def retrieve(self, filename):
+        with self.lock:
+            return super().retrieve(filename)
+    
+    def check_if_processed(self, filename):
+        # Blocking, until we can get the connection
+        with self.lock:
+            return super().check_if_processed(filename)
+
+
+class QueueingProcessedImages(LockingProcessedImages):
+    def __init__(self, db_dir=None):
+        super().__init__(db_dir=db_dir)
+        logger.debug('Created processed images queue')
         self.add_queue = Queue()
 
     def start(self):
         logger.debug('Starting processed images queue')
-        self.p.load()
+        super().load()
         self.add_thread = Thread(target=self.process_add_queue)
         self.add_thread.start()
 
@@ -198,49 +215,21 @@ class QueueingProcessedImages():
 
         logger.debug('Stopping processed images queue')
         logger.debug('Sending commit')
-        self.p.commit()
-        self.p.close()
+        super().close()
 
 
     def process_add_queue(self):
-        locked = False
         while True:
             item = self.add_queue.get()
             if item is None:
                 self.add_queue.task_done()
                 logger.debug('add queue recieved shutdown signal')
                 break
-            
-            if not locked:
-                locked = self.lock.acquire()
 
-                logger.debug(f'retrieved item from add queue, {self.add_queue.qsize()} items remaining')
-                self.p.add(item)
+            logger.debug(f'retrieved item from add queue, {self.add_queue.qsize()} items remaining')
+            
+            super().add(item)
             self.add_queue.task_done()
 
-            # Release lock when queue is empty.
-            if self.add_queue.qsize() < 1:
-                self.lock.release()
-                locked = False
-
     def add(self, metadata):
-        # Place data in a queue, and return immediately
         self.add_queue.put(metadata)
-
-    def commit(self):
-        # This should do nothing in the queueing version.
-        pass
-
-    def get_file_list(self):
-        with self.lock:
-            return self.p.get_file_list()
-
-    def retrieve(self, filename):
-        # Blocking, until we can get the connection
-        with self.lock:
-            return self.p.retrieve(filename)
-    
-    def check_if_processed(self, filename):
-        # Blocking, until we can get the connection
-        with self.lock:
-            return self.p.check_if_processed(filename)

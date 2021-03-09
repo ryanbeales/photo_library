@@ -1,7 +1,7 @@
 import os
 from ingest.image import Image
 
-from processed_images.processed_images import QueueingProcessedImages, ProcessedImage
+from processed_images.processed_images import LockingProcessedImages, ProcessedImages, QueueingProcessedImages, ProcessedImage
 
 from threading import Lock
 from queue import Queue
@@ -16,7 +16,7 @@ class DirectoryWorker(object):
         self,
         #classifer=None,  #Classifier('/work/nasnet/nasnet_large.tflite', '/work/nasnet/labels.txt'),
         #object_detector=None, #ObjectDetector('/work/object_detector'),
-        processed_images=QueueingProcessedImages(db_dir='/work/stash/src/classification_output/'),
+        processed_images=LockingProcessedImages(db_dir='/work/stash/src/classification_output/'),
         file_types=['.CR2', '.CR3', '.JPG']
     ):
         self.processed_images = processed_images
