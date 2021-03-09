@@ -2,7 +2,7 @@ import json
 from dataclasses import dataclass
 import datetime
 import os
-from sqlalchemy import create_engine
+import sqlite3
 
 from threading import Thread, Lock
 from queue import Queue, Empty
@@ -21,6 +21,7 @@ class ProcessedImage():
     longitude: float
 
 
+
 class ProcessedImages(object):
     def __init__(self, db_dir=None):
         self.db_file = db_dir + os.sep + 'images.db'
@@ -28,9 +29,7 @@ class ProcessedImages(object):
     def load(self):
         logger.info(f'Opening photo database {self.db_file}')
 
-        #self.conn = sqlite3.connect(self.db_file, check_same_thread=False, isolation_level=None)
-        self.conn = create_engine('sqlite:///' + self.db_file)
-        self.conn.isolation_level = 'AUTOCOMMIT'
+        self.conn = sqlite3.connect(self.db_file, check_same_thread=False, isolation_level=None)
 
         logger.debug('Create table if not exists')
         self.conn.execute('''
@@ -44,10 +43,12 @@ class ProcessedImages(object):
                 longitude REAL
             );
         ''')
+        self.conn.execute('PRAGMA journal=MEMORY')
 
         self.conn.execute('''CREATE UNIQUE INDEX IF NOT EXISTS photos_filename_ids on photos(filename);''')
-        self.conn.execute('''PRAGMA foreign_keys = ON;''')
-        self.conn.execute('''PRAGMA journal_mode = MEMORY;''')
+        self.conn.execute('''CREATE INDEX IF NOT EXISTS photos_filetypes on photos(filetype);''')
+        self.conn.execute('''CREATE INDEX IF NOT EXISTS photos_dates on photos(date_taken);''')
+        
 
     def start(self):
         self.load()
@@ -62,13 +63,12 @@ class ProcessedImages(object):
         )
         logger.debug(f'INSERT or REPLACE row for {metadata.filename}')
         try:
-            conn = create_engine('sqlite:///' + self.db_file)
-            with conn.begin():
-                conn.execute('''
-                    REPLACE INTO 
-                    photos (filename, filetype, date_taken, exif_data, thumbnail) 
-                    VALUES (?,?,?,?,?)  
-                ''', insert_values)
+            self.conn.execute('''
+                REPLACE INTO 
+                photos (filename, filetype, date_taken, exif_data, thumbnail) 
+                VALUES (?,?,?,?,?)  
+            ''', insert_values)
+            self.conn.commit()
         except Exception as e:
                 logger.error(f'Failed to insert {metadata.filename}: {e}')
 
@@ -158,10 +158,10 @@ class ProcessedImages(object):
     
     def close(self):
         logger.debug('closing database')
-        self.conn.close()
+        #self.conn.close()
 
     def stop(self):
-        self.close()
+        pass #self.close()
 
 
 class LockingProcessedImages(ProcessedImages):

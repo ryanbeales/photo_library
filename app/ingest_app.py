@@ -57,13 +57,13 @@ class Display():
 
 paths = [
     # Selection of all cameras that produce RAW files:
-    r'/work/stash/Photos/Canon EOS M5/2019/02/16/CR2',
+    r'/work/stash/Photos/Canon EOS M5',
     r'/work/stash/Photos/60D',
     r'/work/stash/Photos/350D',
     r'/work/stash/Photos/Canon EOS M6 II',
     r'/work/stash/Photos/M3',
     # And JPEGs:
-    r'/work/stash/Photos/Google Photos/2020 Photos/'
+    r'/work/stash/Photos/Google Photos/2020 Photos'
 ]
 
 if __name__ == '__main__':

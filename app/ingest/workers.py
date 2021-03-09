@@ -110,7 +110,6 @@ class DirectoryWorker(object):
         logger.info(f'Sending {image_file} metadata to processed images')
         self.processed_images.add(metadata)
 
-        self.processed_images.commit()
         processed_file_callback(image_file, 'end')
 
 
