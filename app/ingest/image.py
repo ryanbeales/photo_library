@@ -41,12 +41,17 @@ class Image(object):
         self.location = None
         self.date_taken = None
         self.load_file(filename)
-        self.bracket_mode = 0
-        self.bracket_shot_count = 1
-        self.bracket_exposure_value = 0
 
     def load_file(self, filename):
-        logger.debug(f'loading {filename}')
+        self.load_exif()
+
+        logger.debug(f'Getting date taken for {filename}')
+        try:
+            self.date_taken = datetime.strptime(self.get_exif()['EXIF:DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
+        except:
+            logger.warning(f'unable to get date from exif data in {filename}, using file date')
+            self.date_taken = datetime.fromtimestamp(os.stat(filename).st_ctime)
+
         self.extension = os.path.splitext(filename)[-1].upper()
         if self.extension in ['.JPG', '.JPEG']:
             self.load_jpeg_file(filename)
@@ -56,48 +61,37 @@ class Image(object):
             logger.debug(f"don't know how to open {filename}")
             raise Exception(f"I don't know how to open {self.extension}, sorry.")
 
-    def load_jpeg_file(self, filename):
-        self.img = PIL_Image.open(filename)
-        self.make_exif(self.img.getexif())
-        self.date_taken = datetime.strptime(self.get_exif()['DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
-        logger.debug(f'opened jpeg {filename} which was taken at {self.date_taken}')
 
+    def load_jpeg_file(self, filename):
+        logger.debug(f'Opening jpeg file with PIL {filename}')
+        self.filetype = 'JPEG'
+        self.img = PIL_Image.open(filename)
+        
     def load_raw_file(self, filename):
         # Load image data in as a PIL object
+        self.filetype = 'RAW'
         with rawpy.imread(filename) as raw:
             logger.debug(f'opening raw file: {filename}')
             self.img = PIL_Image.open(BytesIO(raw.extract_thumb().data))
+
+    def load_exif(self):
         with ExifTool() as e:
-            logger.debug(f'sending {filename} to exiftool')
-            self.exif_data = e.get_metadata(filename)[0]
+            logger.debug(f'sending {self.filename} to exiftool')
+            try:
+                self.exif_data = e.get_metadata(self.filename)
+                logger.debug(f'successfully loaded exif on {self.filename}')
+            except:
+                logger.error(f'error loading exif on {self.filename}')
 
 
-        try:
-            self.date_taken = datetime.strptime(self.get_exif()['EXIF:DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
-        except:
-            logger.warning(f'unable to get date from exif data in {filename}, using file date')
-            self.date_taken = datetime.fromtimestamp(os.stat(filename).st_ctime)
-            
-        self.bracket_exposure_value = self.get_exif()['MakerNotes:BracketValue']
-        self.bracket_mode = self.get_exif()['MakerNotes:BracketMode']
-        if 'MakerNotes:AEBShotCount' in self.get_exif():
-            self.bracket_shot_count = self.get_exif()['MakerNotes:AEBShotCount']
-        else:
-            self.bracket_shot_count = 3
-        logger.debug(f'AEB data on {filename}: {self.bracket_mode}, {self.bracket_exposure_value}, {self.bracket_shot_count}')
-        
     def get_exif(self):
         return self.exif_data
     
     def get_json_safe_exif(self):
-        return {k: str(v) for k,v in self.get_exif().items() }
-    
-    def make_exif(self, e):
-        self.exif_data = {
-            ExifTags.TAGS[k]: v
-            for k, v in e.items()
-            if k in ExifTags.TAGS
-        }
+        logger.debug(f'Generating json safe exif for {self.filename}')
+        results = {k: str(v) for k,v in self.get_exif().items() }
+        logger.debug(f'Finished generating json safe exif for {self.filename}')
+        return results
 
     def get_photo_date(self):
         return self.date_taken
@@ -111,12 +105,14 @@ class Image(object):
     def get_image_object(self):
         return self.img
     
-    def get_thumbnail(self):
+    def get_thumbnail(self, long_edge_size=512):
         logger.debug(f'generating thumbnail for {self.filename}')
-        thumb = self.img.resize((64,64))
+        self.img.thumbnail((long_edge_size,long_edge_size))
         buffered = BytesIO()
-        thumb.save(buffered, format="JPEG")
-        return base64.b64encode(buffered.getvalue())
+        self.img.save(buffered, format="JPEG")
+        result = base64.b64encode(buffered.getvalue()).decode('utf-8')
+        logger.debug(f'generated thumbnail for {self.filename}')
+        return result
 
     def get_fingerprint(self):
         logger.debug(f'generating fingerprint for {self.filename}')

@@ -30,6 +30,7 @@ class HDRFinder(object):
 
 if __name__ == '__main__':
     # Scan for HDRs.
+    # EXIF:ExposureCompensation is what we want.
     photos = ProcessedImages(db_dir='/work/stash/src/classification_output/')
     for photo in photos.get_file_list():
         p = photos.retrieve(photo)

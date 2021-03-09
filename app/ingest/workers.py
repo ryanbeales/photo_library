@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 import logging
 logger = logging.getLogger(__name__)
 
+
 class DirectoryWorker(object):
     def __init__(
         self,
@@ -27,12 +28,13 @@ class DirectoryWorker(object):
         if not file_types:
             file_types = self.file_types
 
+        previous_count = self.get_total_files()
         for root, _, files in os.walk(base_dir, topdown = False):
             for name in files:
                 fullpath = os.path.join(root, name)
                 if os.path.splitext(fullpath)[-1].upper() in file_types:
                     self.found_files.append(fullpath)
-        logger.info(f'found {len(self.found_files)} in {base_dir}')
+        logger.info(f'found {len(self.found_files)-previous_count} in {base_dir}')
         return self.found_files
 
     def set_directory(self, directory):
@@ -68,14 +70,16 @@ class DirectoryWorker(object):
             # I need to check for bad results in all of these:
             logger.info('Waiting for all threads to finish')
             wait(results, return_when=ALL_COMPLETED)
+
+            # If we don't do this the tread might result in an exception which is never shown.
+            # But looking at each result we cause the Exception to be displayed at least.
+            for result in results:
+                if result.result():
+                    logger.debug(f'Thread result: {result.result()}')
+
         processed_file_callback('All', 'done')
         self.processed_images.stop()
         logger.info('Finished scan')
-        # Scan data for HDRs
-        #print('Scanning for HDRs')
-
-        #for r in processed_images.get_file_list:
-
 
     def process_single_image_thread(self, image_file, reprocess, processed_file_callback):
         processed_file_callback(image_file, 'start')
@@ -86,7 +90,22 @@ class DirectoryWorker(object):
             return
 
         logger.info(f'Processing {image_file}')
-        metadata = self.process_image(image_file)
+        try:
+            image = Image(image_file)
+        except Exception as e:
+            logger.error(f'Exception during image processing {e}')
+            processed_file_callback(image_file, 'error')
+            return None    
+
+        metadata = ProcessedImage(
+            filename=image_file,
+            filetype=image.filetype,
+            date_taken=image.get_photo_date(),
+            exif_data = image.get_json_safe_exif(),
+            thumbnail=image.get_thumbnail(),
+            latitude=None,
+            longitude=None
+        )
 
         logger.info(f'Sending {image_file} metadata to processed images')
         self.processed_images.add(metadata)
@@ -94,21 +113,6 @@ class DirectoryWorker(object):
         self.processed_images.commit()
         processed_file_callback(image_file, 'end')
 
-    def process_image(self, filename):
-        logger.debug(f'Loading Image {filename}')
-        image = Image(filename)
-    
-        #logger.debug(f'Finding location for {filename}')
-        #location = self.locations.get_location_at_timestamp(image.get_photo_date()) if self.locations and get_location else None
-
-        p = ProcessedImage(
-            filename=filename,
-            date_taken=image.get_photo_date(),
-            exif_data = image.get_json_safe_exif(),
-            thumbnail=image.get_thumbnail().decode('utf-8')
-        )
-
-        return p
 
 class MultiDirectoryWorker(DirectoryWorker):
     def __init__(self, *args, **kwargs):

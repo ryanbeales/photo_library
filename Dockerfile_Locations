@@ -1,5 +1,4 @@
 FROM photoingest:latest
-RUN mkdir /work
 
 # Install all python package dependancies
 RUN pip install geopy
