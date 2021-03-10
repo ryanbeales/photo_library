@@ -125,7 +125,7 @@ class ProcessedImages(object):
     def set_location(self, filename, lat, lng):
         logger.debug(f'Adding coords for {filename}')
         self.conn.execute('''
-            UPDATE photos SET (latitude = ?, longitude = ?) WHERE filename = ?
+            UPDATE photos SET latitude = ?, longitude = ? WHERE filename = ?;
         ''', (lat, lng, filename, ))
 
     def retrieve(self, filename):

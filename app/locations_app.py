@@ -47,6 +47,8 @@ if __name__ == '__main__':
             l = [lat,lng]
         else:
             l = locations.get_location_at_timestamp(p.date_taken)
+
+        photos.set_location(p.filename, l[0], l[1])
         progress.next()
 
     progress.finish()
