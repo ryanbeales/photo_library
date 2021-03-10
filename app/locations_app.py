@@ -1,3 +1,4 @@
+from config import config
 from locations.locations import Locations
 from processed_images.processed_images import ProcessedImages
 from progress.bar import Bar
@@ -5,13 +6,13 @@ from progress.bar import Bar
 if __name__ == '__main__':
     reprocess = False
 
-    locations=Locations(history_file='/work/stash/Backup/Google Location History/Location History.json', history_db_dir='/work/stash/src/classification_output/', reload=False)
+    locations=Locations(history_file=config['locations']['history_file'], history_db_dir=config['locations']['database_dir'], reload=False)
 
     # Scan for locations.
-    photos = ProcessedImages(db_dir='/work/stash/src/classification_output/')
+    photos = ProcessedImages(db_dir=config['photo_database']['database_dir'])
     photos.load()
     
-    if reprocess:
+    if config['locations'].getboolean('reprocess'):
         photolist = photos.get_file_list()
     else:
         photolist = photos.get_empty_locations()
@@ -35,14 +36,13 @@ if __name__ == '__main__':
         # If longitude ref is E, then negate longitude number
         # This might be better data than location history? I'd hope not.
 
+        if all([key in p.exif_data for key in [v for k,v in config['locations_exif_tags'].items()  if k not in config['DEFAULT'].keys()]]):
+            lat = p.exif_data[config['locations_exif_tags']['lat']]
+            lng = p.exif_data[config['locations_exif_tags']['lng']]
 
-        if all([key in p.exif_data for key in ['EXIF:GPSLatitudeRef','EXIF:GPSLatitude','EXIF:GPSLongitudeRef','EXIF:GPSLongitude']]):
-            lat = p.exif_data['EXIF:GPSLatitude']
-            lng = p.exif_data['EXIF:GPSLongitude']
-
-            if p.exif_data['EXIF:GPSLatitudeRef'] == 'S':
+            if p.exif_data[config['locations_exif_tags']['lat_ref']] == 'S':
                 lat = -lat
-            if p.exif_data['EXIF:GPSLongitudeRef'] == 'E':
+            if p.exif_data[config['locations_exif_tags']['lng_ref']] == 'E':
                 lng = -lng
             l = [lat,lng]
         else:

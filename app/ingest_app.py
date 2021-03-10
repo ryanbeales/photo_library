@@ -1,7 +1,8 @@
 # Example https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/examples/python/label_image.py
 
-import logging
+from config import config
 
+import logging
 logging.getLogger('PIL.TiffImagePlugin').setLevel(logging.ERROR)
 
 import time
@@ -55,30 +56,21 @@ class Display():
                 # Monitor queue size?
                 print('waiting for queue to empty...')
 
-paths = [
-    # Selection of all cameras that produce RAW files:
-    r'/work/stash/Photos/Canon EOS M5',
-    r'/work/stash/Photos/60D',
-    r'/work/stash/Photos/350D',
-    r'/work/stash/Photos/Canon EOS M6 II',
-    r'/work/stash/Photos/M3',
-    # And JPEGs:
-    r'/work/stash/Photos/Google Photos/2020 Photos'
-]
-
 if __name__ == '__main__':
     logging.basicConfig(
-        filename=r'/work/stash/src/classification_output/images.log', 
+        filename=config['logging']['log_file'], 
         filemode='w', 
         format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
         datefmt='%m/%d/%Y %I:%M:%S %p',
-        level=logging.DEBUG
+        level=config['logging']['log_level']
     )
     logger = logging.getLogger(__name__)
 
     logger.debug('Creating worker object')
     w = MultiDirectoryWorker()
 
+    # Get list of paths from section in config file, but exclude default keys (including the base path...)
+    paths = [ v for k,v in config['ingest_paths'].items() if k not in config['DEFAULT'].keys()]
     logging.debug(f'Setting paths to process: {paths}')
     print('Scanning directories for files...')
     w.set_directory(paths)
@@ -87,10 +79,8 @@ if __name__ == '__main__':
     logging.info(f'total files to process {total_files}')
 
     logging.debug('creating display object')
-    d = Display(total_files, progress_bar=True)
-    reprocess = False
-    if 'PHOTO_REPROCESS' in os.environ:
-        reprocess=True
+    d = Display(total_files, progress_bar=config['ingest'].getboolean('progress_bar'))
+    reprocess = config['ingest'].getboolean('reingest')
 
     logging.info(f'reprocessing of files set to {reprocess}')
     logging.debug('starting scan of paths')

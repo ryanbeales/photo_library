@@ -1,3 +1,5 @@
+from config import config
+
 import os
 from ingest.image import Image
 
@@ -14,9 +16,7 @@ logger = logging.getLogger(__name__)
 class DirectoryWorker(object):
     def __init__(
         self,
-        #classifer=None,  #Classifier('/work/nasnet/nasnet_large.tflite', '/work/nasnet/labels.txt'),
-        #object_detector=None, #ObjectDetector('/work/object_detector'),
-        processed_images=LockingProcessedImages(db_dir='/work/stash/src/classification_output/'),
+        processed_images=LockingProcessedImages(db_dir=config['photo_database']['database_dir']),
         file_types=['.CR2', '.CR3', '.JPG']
     ):
         self.processed_images = processed_images
