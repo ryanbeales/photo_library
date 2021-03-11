@@ -103,6 +103,23 @@ class ProcessedImages(object):
         r = rs.fetchall()
         results = [x[0] for x in r]
         return results
+    
+    def get_file_list_date_range(self, start_date, end_date):
+        logger.debug(f'Getting list of all filenames between {start_date} and {end_date}')
+        
+        daterange = {
+            'start': int(start_date.timestamp()),
+            'end': int(end_date.timestamp())
+        }
+
+        rs = self.conn.execute('''
+            SELECT filename FROM photos WHERE date_taken BETWEEN :start AND :end;
+        ''',
+            daterange
+        )
+        r = rs.fetchall()
+        results = [x[0] for x in r]
+        return results
 
     def get_raw_files(self):
         logger.debug(f'Get list of all filenames ordered by date taken')
@@ -111,6 +128,14 @@ class ProcessedImages(object):
         ''')
         r = rs.fetchall()
         results = [x[0] for x in r]
+        return results
+    
+    def get_locations(self):
+        logger.debug(f'Getting a list of all files and locations')
+        rs = self.conn.execute('''
+            SELECT filename, latitude, longitude FROM photos where latitude IS NOT NULL AND longitude IS NOT NULL
+        ''')
+        results = rs.fetchall()
         return results
 
     def get_empty_locations(self):
@@ -176,6 +201,14 @@ class LockingProcessedImages(ProcessedImages):
     def get_file_list(self):
         with self.lock:
             return super().get_file_list()
+
+    def get_file_list_date_range(self, start, end):
+        with self.lock:
+            return super().get_file_list_date_range(start, end)
+    
+    def get_locations(self):
+        with self.lock:
+            return super().get_locations()
 
     def retrieve(self, filename):
         with self.lock:

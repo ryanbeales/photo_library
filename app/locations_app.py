@@ -24,8 +24,6 @@ AND json_extract(exif_data, '$.EXIF:GPSLongitudeRef') IS NOT NULL
 
 
 if __name__ == '__main__':
-    reprocess = False
-
     locations=Locations(history_file=config['locations']['history_file'], history_db_dir=config['locations']['database_dir'], reload=False)
 
     # Scan for locations.
@@ -68,9 +66,9 @@ if __name__ == '__main__':
                 lat = float(lat)
                 lng = float(lng)
 
-                if p.exif_data[config['locations_exif_tags']['lat_ref']] == 'S':
+                if p.exif_data[config['locations_exif_tags']['lat_ref']] == 'S' and lat > 0.0:
                     lat = -lat
-                if p.exif_data[config['locations_exif_tags']['lng_ref']] == 'E':
+                if p.exif_data[config['locations_exif_tags']['lng_ref']] == 'W' and lng > 0.0:
                     lng = -lng
                 l = [lat,lng]
             else:
@@ -78,6 +76,7 @@ if __name__ == '__main__':
         else:  
             l = locations.get_location_at_timestamp(p.date_taken)
 
+        print(p.filename)
         photos.set_location(p.filename, l[0], l[1])
         progress.next()
 

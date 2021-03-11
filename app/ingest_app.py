@@ -87,7 +87,3 @@ if __name__ == '__main__':
     w.scan(reprocess=reprocess, processed_file_callback=d.display_callback)
     logging.debug('finished scanning all files')
     print('')
-
-    #print('Generating map')
-    #w.make_map('/work/stash/src/classification_output/image_map.html')
-    #print('Done!')

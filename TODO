@@ -1,21 +1,23 @@
-# https://letmaik.github.io/rawpy/api/ for raw files.
+https://letmaik.github.io/rawpy/api/ for raw files.
 
-# Something for maps? Searching based on class? area?
 
 # TODO:
-# - https://www.sqlite.org/json1.html
-# - Monitor queue depth? somehow.
-# - Exif on a thread, make it not fail on missing keys...
-# - Fix misclassification of rivers/waterfalls as Geysers.
-# - Fail gracefully if anything goes missing / is wrong (location data, unreadable files, etc)
-# - Let tensorflow download models from hub? Maybe after we're confident it all works.
-# - This https://stackoverflow.com/a/13517771 or https://en.wikipedia.org/wiki/Earth_mover%27s_distance to find similar images.
-# - A way to query/display all this...
-# - Make it a pipeline? Load image and exif data, then separate HDR, panorama, object detection processes in different container types all loading from the DB?
-#   They'd all be different database tables then using the filenames as keys?
-#   Pipeline can use external queues for notifications? and separate DB storage? Maybe apache airflow?
+- Query by date.
+- Query by region name here https://github.com/che0/countries/blob/master/countries.py ? Osgeo library and a shape file. This exists for canada https://www.nrcan.gc.ca/earth-sciences/geography/download-geographical-names-data/9245
+- Fix location data, some things showing up in south atlantic.
+- Exif on a thread, make it not fail on missing keys...
+- Fix misclassification of rivers/waterfalls as Geysers.
+- Fail gracefully if anything goes missing / is wrong (location data, unreadable files, etc)
+- Let tensorflow download models from hub? Maybe after we're confident it all works.
+- This https://stackoverflow.com/a/13517771 or https://en.wikipedia.org/wiki/Earth_mover%27s_distance to find similar images.
+- A way to query/display all this...
+- Make it a pipeline? Load image and exif data, then separate HDR, panorama, object detection processes in different container types all loading from the DB?
+  They'd all be different database tables then using the filenames as keys?
+  Pipeline can use external queues for notifications? and separate DB storage? Maybe apache airflow?
 
 # Done:
+# - Monitor queue depth? somehow. - Queue is removed to keep memory usage down
+# - https://www.sqlite.org/json1.html - Partly implmented in some queries
 # - Logging!! - DONE
 # - Threading for image processing? How can I do that. - DONE
 # - Make processed image class, instead of just using a dict. - DONE

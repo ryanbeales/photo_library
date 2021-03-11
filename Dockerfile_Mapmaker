@@ -1,0 +1,6 @@
+FROM photoingest:latest
+
+# Install all python package dependancies
+RUN pip install folium
+WORKDIR /work/app
+ENTRYPOINT [ "python", "/work/app/map_maker_app.py" ]
