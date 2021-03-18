@@ -15,7 +15,7 @@ WORKDIR /work/Image-ExifTool-12.21
 RUN perl Makefile.PL; make install
 
 # Install all python package dependancies
-RUN pip install pillow psutil rawpy scipy pyexiftool progress dataclasses SQLAlchemy
+RUN pip install pillow psutil rawpy scipy pyexiftool progress dataclasses humanfriendly
 
 # Copy application files 
 COPY app /work/app

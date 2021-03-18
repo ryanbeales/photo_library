@@ -14,6 +14,10 @@ https://letmaik.github.io/rawpy/api/ for raw files.
 - Make it a pipeline? Load image and exif data, then separate HDR, panorama, object detection processes in different container types all loading from the DB?
   They'd all be different database tables then using the filenames as keys?
   Pipeline can use external queues for notifications? and separate DB storage? Maybe apache airflow?
+- Panorama finder using OpenCV stitching? https://docs.opencv.org/2.4/modules/stitching/doc/stitching.html
+  https://www.pyimagesearch.com/2018/12/17/image-stitching-with-opencv-and-python/
+  http://datahacker.rs/005-how-to-create-a-panorama-image-using-opencv-with-python/
+- Look at OpenCV HDR module https://docs.opencv.org/3.4/d3/db7/tutorial_hdr_imaging.html
 
 # Done:
 # - Monitor queue depth? somehow. - Queue is removed to keep memory usage down

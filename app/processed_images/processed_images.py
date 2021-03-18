@@ -3,6 +3,9 @@ from dataclasses import dataclass
 import datetime
 import os
 import sqlite3
+import time
+from humanfriendly import format_timespan
+
 
 from threading import Thread, Lock
 from queue import Queue, Empty
@@ -25,6 +28,14 @@ class ProcessedImage():
 class ProcessedImages(object):
     def __init__(self, db_dir=None):
         self.db_file = db_dir + os.sep + 'images.db'
+
+    def _run_query(self, *args, **kwargs):
+        start = time.time()
+        logger.debug(f"Running query: {args[0]}")
+        results = self.conn.execute(*args, **kwargs)
+        end = time.time()
+        logger.debug(f'Query time: {format_timespan(end-start)}')
+        return results
         
     def load(self):
         logger.info(f'Opening photo database {self.db_file}')
@@ -32,7 +43,7 @@ class ProcessedImages(object):
         self.conn = sqlite3.connect(self.db_file, check_same_thread=False, isolation_level=None)
 
         logger.debug('Create table if not exists')
-        self.conn.execute('''
+        self._run_query('''
             CREATE TABLE IF NOT EXISTS photos (
                 filename TEXT NOT NULL PRIMARY KEY,
                 filetype TEXT NOT NULL,
@@ -43,11 +54,12 @@ class ProcessedImages(object):
                 longitude REAL
             );
         ''')
-        self.conn.execute('PRAGMA journal=MEMORY')
+        self._run_query('PRAGMA journal=MEMORY')
+        self._run_query('PRAGMA temp_store = MEMORY;')
 
-        self.conn.execute('''CREATE UNIQUE INDEX IF NOT EXISTS photos_filename_ids on photos(filename);''')
-        self.conn.execute('''CREATE INDEX IF NOT EXISTS photos_filetypes on photos(filetype);''')
-        self.conn.execute('''CREATE INDEX IF NOT EXISTS photos_dates on photos(date_taken);''')
+        self._run_query('''CREATE UNIQUE INDEX IF NOT EXISTS photos_filename_ids on photos(filename);''')
+        self._run_query('''CREATE INDEX IF NOT EXISTS photos_filetypes on photos(filetype);''')
+        self._run_query('''CREATE INDEX IF NOT EXISTS photos_dates on photos(date_taken);''')
         
 
     def start(self):
@@ -63,7 +75,7 @@ class ProcessedImages(object):
         )
         logger.debug(f'INSERT or REPLACE row for {metadata.filename}')
         try:
-            self.conn.execute('''
+            self._run_query('''
                 REPLACE INTO 
                 photos (filename, filetype, date_taken, exif_data, thumbnail) 
                 VALUES (?,?,?,?,?)  
@@ -77,14 +89,14 @@ class ProcessedImages(object):
         inserts = [(name, i.filename) for i in filenames]
         logger.debug(f'creating hdr set {name} = {inserts}')
         for insert in inserts:
-            self.conn.execute('''
+            self._run_query('''
                 REPLACE INTO hdr_groups VALUES (?,?)
             ''', insert)
 
     def check_if_processed(self, filename):
         logger.debug(f'Checking if {filename} already exists in DB')
         
-        rs = self.conn.execute('''
+        rs = self._run_query('''
             SELECT EXISTS(SELECT 1 FROM photos WHERE filename=?)
         ''', ( filename, ))
         r = rs.fetchone()
@@ -97,7 +109,7 @@ class ProcessedImages(object):
 
     def get_file_list(self):
         logger.debug(f'Get list of all filenames ordered by date taken')
-        rs = self.conn.execute('''
+        rs = self._run_query('''
             SELECT filename FROM photos ORDER BY filename, date_taken
         ''')
         r = rs.fetchall()
@@ -112,7 +124,7 @@ class ProcessedImages(object):
             'end': int(end_date.timestamp())
         }
 
-        rs = self.conn.execute('''
+        rs = self._run_query('''
             SELECT filename FROM photos WHERE date_taken BETWEEN :start AND :end;
         ''',
             daterange
@@ -123,7 +135,7 @@ class ProcessedImages(object):
 
     def get_raw_files(self):
         logger.debug(f'Get list of all filenames ordered by date taken')
-        rs = self.conn.execute('''
+        rs = self._run_query('''
             SELECT filename FROM photos WHERE filetype = 'RAW' ORDER BY filename, date_taken
         ''')
         r = rs.fetchall()
@@ -132,7 +144,7 @@ class ProcessedImages(object):
     
     def get_locations(self):
         logger.debug(f'Getting a list of all files and locations')
-        rs = self.conn.execute('''
+        rs = self._run_query('''
             SELECT filename, latitude, longitude FROM photos where latitude IS NOT NULL AND longitude IS NOT NULL
         ''')
         results = rs.fetchall()
@@ -140,7 +152,7 @@ class ProcessedImages(object):
 
     def get_empty_locations(self):
         logger.debug(f'Get list of all filenames that do not have any location data')
-        rs = self.conn.execute('''
+        rs = self._run_query('''
             SELECT filename, date_taken FROM photos WHERE latitude IS NULL and longitude IS NULL ORDER BY filename, date_taken
         ''')
         r = rs.fetchall()
@@ -149,13 +161,13 @@ class ProcessedImages(object):
 
     def set_location(self, filename, lat, lng):
         logger.debug(f'Adding coords for {filename}')
-        self.conn.execute('''
+        self._run_query('''
             UPDATE photos SET latitude = ?, longitude = ? WHERE filename = ?;
         ''', (lat, lng, filename, ))
 
     def retrieve(self, filename):
         logger.debug(f'Retreive data for {filename}')
-        rs = self.conn.execute('''
+        rs = self._run_query('''
             SELECT filename, filetype, date_taken, exif_data, thumbnail, latitude, longitude
             FROM photos
             WHERE filename = ?
@@ -194,31 +206,9 @@ class LockingProcessedImages(ProcessedImages):
         super().__init__(db_dir)
         self.lock = Lock()
 
-    def add(self, metadata):
+    def _run_query(self, *args, **kwargs):
         with self.lock:
-            super().add(metadata)
-
-    def get_file_list(self):
-        with self.lock:
-            return super().get_file_list()
-
-    def get_file_list_date_range(self, start, end):
-        with self.lock:
-            return super().get_file_list_date_range(start, end)
-    
-    def get_locations(self):
-        with self.lock:
-            return super().get_locations()
-
-    def retrieve(self, filename):
-        with self.lock:
-            return super().retrieve(filename)
-    
-    def check_if_processed(self, filename):
-        # Blocking, until we can get the connection
-        with self.lock:
-            return super().check_if_processed(filename)
-
+            super()._run_query(*args, **kwargs)
 
 class QueueingProcessedImages(LockingProcessedImages):
     def __init__(self, db_dir=None):
