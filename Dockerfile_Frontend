@@ -1,0 +1,11 @@
+FROM node:alpine
+
+RUN mkdir /work
+
+# Copy application files 
+COPY frontend /work/frontend
+WORKDIR /work/frontend/photofrontend
+RUN npm install
+
+EXPOSE 3000
+ENTRYPOINT [ "npm", "start" ]
