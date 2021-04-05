@@ -1,0 +1,15 @@
+# python 3.9 on ubuntu base
+FROM python:3.9-buster
+
+RUN mkdir /work
+
+# Install all python package dependancies
+RUN pip install pillow dataclasses humanfriendly graphene flask flask_graphql
+
+EXPOSE 5000
+
+# Copy application files 
+COPY app /work/app
+
+WORKDIR /work/app
+ENTRYPOINT [ "python", "/work/app/photoserver_app.py" ]

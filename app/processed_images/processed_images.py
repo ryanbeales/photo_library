@@ -124,11 +124,14 @@ class ProcessedImages(object):
             'end': int(end_date.timestamp())
         }
 
+        logger.debug(f'Arguments for query = {daterange}')
+
         rs = self._run_query('''
             SELECT filename FROM photos WHERE date_taken BETWEEN :start AND :end;
         ''',
             daterange
         )
+        
         r = rs.fetchall()
         results = [x[0] for x in r]
         return results
@@ -208,7 +211,7 @@ class LockingProcessedImages(ProcessedImages):
 
     def _run_query(self, *args, **kwargs):
         with self.lock:
-            super()._run_query(*args, **kwargs)
+            return super()._run_query(*args, **kwargs)
 
 class QueueingProcessedImages(LockingProcessedImages):
     def __init__(self, db_dir=None):
