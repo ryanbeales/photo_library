@@ -53,7 +53,9 @@ app.add_url_rule('/graphql', view_func=GraphQLView.as_view(
 ))
 
 # Serve this out via flask to be picked up in React:
-queries = """
+@app.route('/queries')
+def queries():
+  return """
 query getPhotolist {
   photolist(startdatetime: "2020-03-01T00:00:00", enddatetime: "2020-03-02T00:00:00")
 }
@@ -67,11 +69,6 @@ query getPhoto($filename: String!) {
     longitude
     thumbnail
   }
-}
-
-Variables:
-{
-  "filename": "/work/stash/Photos/Canon EOS M6 II/2020/03/01/CR3/_MG_1014.CR3"
 }
 """
 
