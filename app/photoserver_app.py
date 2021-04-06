@@ -1,10 +1,12 @@
 from config import config
 from processed_images.processed_images import LockingProcessedImages, ProcessedImage
 
-from graphene import ObjectType, String, Schema, DateTime, List, Int, Field, Float
+from graphene import ObjectType, String, Schema, DateTime, List, Int, Field, Float, JSONString
 
 from flask import Flask
 from flask_graphql import GraphQLView
+from flask_cors import CORS
+
 
 import logging
 import sys
@@ -20,6 +22,7 @@ class Photo(ObjectType):
     datetaken = DateTime()
     latitude = Float()
     longitude = Float()
+    exifdata = JSONString()
 
 
 class Query(ObjectType):
@@ -39,13 +42,16 @@ class Query(ObjectType):
                      thumbnail=p.thumbnail, 
                      datetaken=p.date_taken, 
                      latitude=p.latitude, 
-                     longitude=p.longitude)
+                     longitude=p.longitude,
+                     exifdata=p.exif_data)
 
 # GraphQL schema created:
 schema = Schema(query=Query)
 
 # Flask init
 app = Flask(__name__)
+CORS(app)
+
 app.add_url_rule('/graphql', view_func=GraphQLView.as_view(
     'graphql',
     schema=schema,
@@ -68,6 +74,7 @@ query getPhoto($filename: String!) {
     latitude
     longitude
     thumbnail
+    exifdata
   }
 }
 """

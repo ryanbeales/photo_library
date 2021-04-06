@@ -4,7 +4,7 @@ FROM python:3.9-buster
 RUN mkdir /work
 
 # Install all python package dependancies
-RUN pip install pillow dataclasses humanfriendly graphene flask flask_graphql
+RUN pip install pillow dataclasses humanfriendly graphene flask flask_graphql flask_cors
 
 EXPOSE 5000
 
