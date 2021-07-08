@@ -1,5 +1,6 @@
 from config import config
 from processed_images.processed_images import LockingProcessedImages, ProcessedImage
+from hdr_finder_app import HDRProcessedImages
 
 from graphene import ObjectType, String, Schema, DateTime, List, Int, Field, Float, JSONString
 
@@ -24,10 +25,13 @@ class Photo(ObjectType):
     longitude = Float()
     exifdata = JSONString()
 
+class HDRGroup(ObjectType):
+  group = List(String)
 
 class Query(ObjectType):
     photolist = List(String, startdatetime=DateTime(required=True), enddatetime=DateTime(required=True))
     photo = Field(Photo, filename=String(required=True))
+    hdrgroups = List(HDRGroup)
 
     @staticmethod
     def resolve_photolist(root, info, startdatetime, enddatetime):
@@ -44,6 +48,15 @@ class Query(ObjectType):
                      latitude=p.latitude, 
                      longitude=p.longitude,
                      exifdata=p.exif_data)
+
+    @staticmethod
+    def resolve_hdrgroups(root, info):
+        return [HDRGroup(group=[
+            '/work/stash/Photos/M3/2017/03/04/CR2/IMG_4719.CR2',
+            '/work/stash/Photos/M3/2017/03/04/CR2/IMG_4720.CR2',
+            '/work/stash/Photos/M3/2017/03/04/CR2/IMG_4721.CR2'
+        ])]
+
 
 # GraphQL schema created:
 schema = Schema(query=Query)
@@ -75,6 +88,12 @@ query getPhoto($filename: String!) {
     longitude
     thumbnail
     exifdata
+  }
+}
+
+query gethdrgroups {
+  hdrgroups {
+    group
   }
 }
 """

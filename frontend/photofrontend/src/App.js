@@ -7,6 +7,13 @@ import Masonry, { ResponsiveMasonry } from "react-responsive-masonry" // Layout 
 import LazyLoad from 'react-lazyload'; // Lazy loading for photos in the photolist
 import { Map, Marker } from "pigeon-maps" // Photo Mini map
 import ReactJson from 'react-json-view' // Exif data display
+import Select from 'react-select' // Searchtype switch
+
+const HDRGROUPS = gql`query gethdrgroups {
+  hdrgroups {
+    group
+  }
+}`;
 
 // Get list of all photos between two dates
 const PHOTOLIST = gql`query getPhotolist($startdatetime: DateTime!, $enddatetime: DateTime!) {
@@ -89,33 +96,78 @@ function PhotoList({startdatetime, enddatetime}) {
   return (
     <ResponsiveMasonry columnsCountBreakPoints={{522: 1, 1064: 2, 1596: 3}} >
       <Masonry>
-        {data.photolist.map(filename => { return <LazyLoad height='512px'><Photo key={filename} filename={filename} /></LazyLoad>})}
+        {data.photolist.map(filename => { return <LazyLoad key={filename} height='512px'><Photo filename={filename} /></LazyLoad>})}
       </Masonry>
     </ResponsiveMasonry>
   )
 }
 
-// Graphql client, enable in memory caching to save repeat requests. 
-//Disable cors since we're using localhost.
-const client = new ApolloClient({
-  uri: 'http://127.0.0.1:5000/graphql',
-  cache: new InMemoryCache(),
-  fetchOptions: {
-    mode: 'no-cors',
-  }
-});
+function HDRPhotoList() {
+  const {loading, error, data} = useQuery(HDRGROUPS);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error</p>;
+  if (data.hdrgroups.length === 0) return <p>No photos found</p>;
+
+  return (
+      <ResponsiveMasonry columnsCountBreakPoints={{522: 1, 1064: 2, 1596: 3}} >
+        <Masonry>
+          {data.hdrgroups.map(group => { return <LazyLoad key={group.group[0]} height='512px'>
+                                                  <Photo key={group.group[0]} filename={group.group[0]} />
+                                                  <Photo key={group.group[1]} filename={group.group[1]} />
+                                                  <Photo key={group.group[2]} filename={group.group[2]} />
+                                               </LazyLoad>})}
+        </Masonry>
+      </ResponsiveMasonry>
+    )
+}
+
+
+function PhotoDateRanges() {
+  const [value, onChange] = useState([new Date(), new Date()]);
+
+  return (
+    <div>
+      <div><DateTimeRangePicker onChange={onChange} value={value} /></div>
+      <PhotoList startdatetime={value[0]} enddatetime={value[1]} />
+    </div>
+  )
+};
+
+
+function ViewToggle() {
+  const options = [
+    { value: 'photos', label: 'Photos' },
+    { value: 'hdr', label: 'HDR' }
+  ];
+  
+  const [value, onChange] = useState(String());
+
+  return (
+    <div>
+      <Select options={options} onChange={onChange} />
+      {value['value'] === 'hdr' && <HDRPhotoList />}
+      {value['value'] === 'photos' && <PhotoDateRanges />}
+    </div>
+  )
+}
 
 
 // Our main app. An Apolo App that will load a set of photos based on the dates picked.
 function App() {
-  const [value, onChange] = useState([new Date(), new Date()]);
+  // Graphql client, enable in memory caching to save repeat requests. 
+  //Disable cors since we're using localhost.
+  const client = new ApolloClient({
+    uri: 'http://127.0.0.1:5000/graphql',
+    cache: new InMemoryCache(),
+    fetchOptions: {
+      mode: 'no-cors',
+    }
+  });
 
   return (
       <ApolloProvider client={client}>
-          <div>
-            <DateTimeRangePicker onChange={onChange} value={value} />
-          </div>
-          <PhotoList startdatetime={value[0]} enddatetime={value[1]} />
+          <ViewToggle />
       </ApolloProvider>
     );
 }

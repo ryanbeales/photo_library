@@ -6,10 +6,10 @@ logger = logging.getLogger(__name__)
 
 from pprint import pprint
 
-from processed_images.processed_images import ProcessedImages, ProcessedImage
+from processed_images.processed_images import LockingProcessedImages, ProcessedImage
 
 
-class HDRProcessedImages(ProcessedImages):
+class HDRProcessedImages(LockingProcessedImages):
     def __init__(self, db_dir):
         super().__init__(db_dir)
 
